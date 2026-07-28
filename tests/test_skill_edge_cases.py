@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agenttoolkit import Skills, ToolContext, Tools, parse_skill, register_skill_tools
+from agenttoolkit import Skills, parse_skill
 
 
 def skill_source(
@@ -16,12 +16,7 @@ def skill_source(
     extra: str = "",
 ) -> str:
     return (
-        "---\n"
-        f"name: {name}\n"
-        f"description: {description}\n"
-        f"{extra}"
-        "---\n"
-        f"{instructions}\n"
+        f"---\nname: {name}\ndescription: {description}\n{extra}---\n{instructions}\n"
     )
 
 
@@ -212,27 +207,3 @@ async def test_script_failures_and_timeout_validation_are_returned_safely(
             "scripts/fail.py",
             timeout=0,
         )
-
-
-@pytest.mark.asyncio
-async def test_script_tool_bridge_executes_registered_script(tmp_path: Path) -> None:
-    directory = make_skill(tmp_path)
-    scripts = directory / "scripts"
-    scripts.mkdir()
-    (scripts / "arguments.py").write_text(
-        "import sys\nprint(','.join(sys.argv[1:]))\n",
-        encoding="utf-8",
-    )
-    skills = Skills.from_local_dir(tmp_path)
-    registry = register_skill_tools(Tools(context=ToolContext(skills)))
-
-    result = await registry.execute(
-        "run_skill_script",
-        {
-            "name": "internet-research",
-            "path": "scripts/arguments.py",
-            "args": ["one", "two"],
-        },
-    )
-
-    assert result.value == "one,two"

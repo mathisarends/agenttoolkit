@@ -6,10 +6,7 @@ import pytest
 
 from agenttoolkit import (
     Skills,
-    ToolContext,
-    Tools,
     parse_skill,
-    register_skill_tools,
 )
 
 
@@ -115,37 +112,3 @@ async def test_runs_python_script_without_shell(tmp_path: Path) -> None:
     )
 
     assert output == "hello|world"
-
-
-@pytest.mark.asyncio
-async def test_explicit_tool_bridge_uses_injected_skills(tmp_path: Path) -> None:
-    directory = make_skill(tmp_path)
-    (directory / "notes.md").write_text("Read me.", encoding="utf-8")
-    skills = Skills.from_local_dir(tmp_path)
-    registry = register_skill_tools(Tools())
-
-    assert registry.get_schema() == []
-
-    registry.set_context(ToolContext(skills))
-    schemas = {schema.name for schema in registry.get_schema()}
-    resource = await registry.execute(
-        "read_skill_resource",
-        {"name": "internet-research", "path": "notes.md"},
-    )
-
-    assert schemas == {"load_skill", "read_skill_resource", "run_skill_script"}
-    assert resource.value == "Read me."
-    assert registry.get("run_skill_script").kind == "destructive"
-
-
-def test_script_tool_can_be_disabled(tmp_path: Path) -> None:
-    skills = Skills.from_local_dir(make_skill(tmp_path).parent)
-    registry = register_skill_tools(
-        Tools(context=ToolContext(skills)),
-        include_scripts=False,
-    )
-
-    assert {schema.name for schema in registry.get_schema()} == {
-        "load_skill",
-        "read_skill_resource",
-    }

@@ -6,21 +6,18 @@ from .binding import (
     requires,
 )
 from .context import Inject, ToolContext
-from .middleware import ToolCall, ToolExecutionError, ToolMiddleware
-from .results import ActionResult
+from .middleware import ToolCall, ToolMiddleware
 from .schema import ToolSchema, build_schema
 from .tool import Tool, ToolMetadata, ToolSchemaFormat
 from .tools import Tools
 
 __all__ = [
-    "ActionResult",
     "Inject",
     "Tool",
     "ToolAvailability",
     "ToolCall",
     "ToolContext",
     "ToolDescription",
-    "ToolExecutionError",
     "ToolMetadata",
     "ToolMiddleware",
     "ToolSchema",

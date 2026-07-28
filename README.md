@@ -5,7 +5,7 @@ LLM agents. It combines:
 
 - registration through a decorator or explicit `Tool` objects;
 - JSON Schema generation from Python signatures or Pydantic models;
-- runtime metadata such as action kind, status text, tags, and response hints;
+- runtime metadata such as action kind, status text, tags, and custom values;
 - context-based dependency injection and conditional tool availability;
 - sync and async execution with validation and middleware;
 - thin schema adapters for OpenAI and Anthropic.
@@ -18,7 +18,6 @@ It intentionally contains no application-specific tools or agent loop.
 from pydantic import BaseModel, Field
 
 from agenttoolkit import (
-    ActionResult,
     Inject,
     ToolContext,
     Tools,
@@ -50,9 +49,9 @@ tools = Tools(context=ToolContext(SearchClient()))
 async def search(
     params: SearchParams,
     client: Inject[SearchClient],
-) -> ActionResult:
+) -> list[str]:
     matches = await client.search(params.query, params.limit)
-    return ActionResult.success(matches)
+    return matches
 ```
 
 Expose only the model-facing schema:
@@ -68,6 +67,10 @@ Execute a model-produced call:
 ```python
 result = await tools.execute("search", {"query": "tool middleware"})
 ```
+
+Tool results are returned unchanged. Validation and execution exceptions propagate
+to the caller, so applications can choose their own result and error conventions.
+Custom middleware can add an application-specific result envelope when needed.
 
 Plain function parameters work without a Pydantic model:
 
@@ -87,7 +90,7 @@ Local Agent Skills are discovered from directories containing one subdirectory
 per skill and a `SKILL.md` in each:
 
 ```python
-from agenttoolkit import Skills, ToolContext, Tools, register_skill_tools
+from agenttoolkit import Skills
 
 skills = Skills.from_local_dir("./skills")
 
@@ -97,17 +100,11 @@ system_prompt = f"You are helpful.\n\n{skills.catalog()}"
 # Progressive loading is available directly...
 instructions = skills.load("internet-research")
 resource = skills.read_resource("internet-research", "references/guide.md")
-
-# ...or through explicitly registered agent tools.
-tools = Tools(context=ToolContext(skills))
-register_skill_tools(tools)
 ```
 
-`register_skill_tools` adds `load_skill`, `read_skill_resource`, and
-`run_skill_script`. Pass `include_scripts=False` when the agent must not execute
-bundled code. Resource paths are confined to the selected skill directory and
-scripts run directly without a shell, but skill directories and their scripts
-must still be treated as trusted code.
+Resource paths are confined to the selected skill directory and scripts run
+directly without a shell, but skill directories and their scripts must still be
+treated as trusted code.
 
 ## Development
 

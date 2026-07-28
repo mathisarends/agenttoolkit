@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from agenttoolkit import (
-    ActionResult,
     Inject,
     ToolContext,
-    ToolExecutionError,
     Tools,
     ToolSchemaFormat,
     described,
@@ -42,13 +41,13 @@ async def test_register_validate_inject_and_execute() -> None:
     async def search(
         params: SearchParams,
         dependency: Inject[SearchClient],
-    ) -> ActionResult:
-        return ActionResult.success(f"{dependency.prefix}{params.query}:{params.limit}")
+    ) -> str:
+        return f"{dependency.prefix}{params.query}:{params.limit}"
 
     result = await tools.execute("search", {"query": "docs"})
     tool = tools.get("search")
 
-    assert result == ActionResult.success("found:docs:10")
+    assert result == "found:docs:10"
     assert tool is not None
     assert tool.kind == "read"
     assert tool.metadata.tags == frozenset({"network"})
@@ -56,18 +55,17 @@ async def test_register_validate_inject_and_execute() -> None:
 
 
 @pytest.mark.asyncio
-async def test_plain_signature_is_validated_and_sync_result_is_wrapped() -> None:
+async def test_plain_signature_is_validated_and_sync_result_is_returned() -> None:
     tools = Tools()
 
     @tools.action("Add numbers")
     def add(a: int, b: int = 1) -> int:
         return a + b
 
-    assert await tools.execute("add", {"a": "2"}) == ActionResult.success(3)
+    assert await tools.execute("add", {"a": "2"}) == 3
 
-    invalid = await tools.execute("add", {})
-    assert not invalid.ok
-    assert "a" in (invalid.error or "")
+    with pytest.raises(ValidationError, match="a"):
+        await tools.execute("add", {})
 
 
 def test_schema_is_provider_neutral_with_adapters() -> None:
@@ -125,22 +123,20 @@ def test_context_controls_availability_and_description() -> None:
 
 
 @pytest.mark.asyncio
-async def test_expected_and_unexpected_errors_are_separated() -> None:
+async def test_tool_errors_are_logged_and_propagate_to_the_application(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     tools = Tools()
-
-    @tools.action("Fail safely")
-    def safe_failure() -> None:
-        raise ToolExecutionError("Try a different query")
 
     @tools.action("Fail internally")
     def internal_failure() -> None:
         raise RuntimeError("secret")
 
-    safe = await tools.execute("safe_failure")
-    internal = await tools.execute("internal_failure")
+    with caplog.at_level(logging.ERROR, logger="agenttoolkit.tools.middleware"):
+        with pytest.raises(RuntimeError, match="secret"):
+            await tools.execute("internal_failure")
 
-    assert safe.error == "Try a different query"
-    assert internal.error == "Internal tool error."
+    assert "Tool 'internal_failure' failed" in caplog.text
 
 
 def test_duplicate_registration_and_status_validation() -> None:

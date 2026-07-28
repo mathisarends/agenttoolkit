@@ -14,7 +14,6 @@ from agenttoolkit.tools.middleware import (
     compose,
     default_chain,
 )
-from agenttoolkit.tools.results import ActionResult
 from agenttoolkit.tools.schema import ToolSchema
 from agenttoolkit.tools.tool import (
     StatusFormatter,
@@ -130,7 +129,7 @@ class Tools:
         arguments: Mapping[str, Any] | None = None,
         *,
         context: ToolContext | None = None,
-    ) -> ActionResult:
+    ) -> Any:
         return await self._handler(
             ToolCall(
                 name=name,
@@ -149,11 +148,8 @@ class Tools:
     def __len__(self) -> int:
         return len(self._tools)
 
-    async def _invoke(self, call: ToolCall) -> ActionResult:
+    async def _invoke(self, call: ToolCall) -> Any:
         if call.tool is None or call.params is None:
             raise RuntimeError("Tool pipeline did not resolve and validate the call")
         arguments = resolve_arguments(call.tool, call.params, call.context)
-        result = await call.tool.execute(arguments)
-        return (
-            result if isinstance(result, ActionResult) else ActionResult.success(result)
-        )
+        return await call.tool.execute(arguments)
