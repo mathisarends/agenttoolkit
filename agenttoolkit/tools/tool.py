@@ -55,7 +55,7 @@ class Tool:
         self.description = description
         self.fn = fn
         self.param_model = param_model
-        self.metadata = metadata or ToolMetadata()
+        self._metadata = metadata or ToolMetadata()
         self.requires_approval = requires_approval
         self.available_when = available_when
         self.input_model = _schema_model(fn, param_model=param_model)
@@ -64,11 +64,19 @@ class Tool:
 
     @property
     def kind(self) -> str:
-        return self.metadata.kind
+        return self._metadata.kind
 
     @property
     def status(self) -> StatusFormatter | None:
-        return self.metadata.status
+        return self._metadata.status
+
+    @property
+    def tags(self) -> frozenset[str]:
+        return self._metadata.tags
+
+    @property
+    def extra(self) -> Mapping[str, Any]:
+        return self._metadata.extra
 
     def is_available(self, context: ToolContext | None = None) -> bool:
         return True if self.available_when is None else self.available_when(context)

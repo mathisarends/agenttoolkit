@@ -51,8 +51,8 @@ async def test_register_validate_inject_and_execute() -> None:
     assert result == ActionResult.success("found:docs:10")
     assert tool is not None
     assert tool.kind == "read"
-    assert tool.metadata.tags == frozenset({"network"})
-    assert tool.metadata.extra["owner"] == "knowledge"
+    assert tool.tags == frozenset({"network"})
+    assert tool.extra["owner"] == "knowledge"
 
 
 @pytest.mark.asyncio

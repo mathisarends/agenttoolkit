@@ -14,35 +14,22 @@ it is a building block, not a framework.
 - [Installation](#installation)
 - [Quickstart](#quickstart)
 - [Defining tools](#defining-tools)
-  - [Plain function parameters](#plain-function-parameters)
-  - [Pydantic parameter models](#pydantic-parameter-models)
-  - [Registering `Tool` objects directly](#registering-tool-objects-directly)
 - [Dependency injection with `ToolContext`](#dependency-injection-with-toolcontext)
 - [Conditional availability and descriptions](#conditional-availability-and-descriptions)
-- [Schema generation](#schema-generation)
-- [Executing tool calls](#executing-tool-calls)
+- [Driving an agent loop](#driving-an-agent-loop)
 - [Results (`ActionResult`)](#results-actionresult)
-  - [Typed and project-specific results](#typed-and-project-specific-results)
 - [Middleware](#middleware)
-  - [Built-in middleware chain](#built-in-middleware-chain)
-  - [Writing custom middleware](#writing-custom-middleware)
-- [Tool metadata](#tool-metadata)
-- [Approval-gated tools](#approval-gated-tools)
 - [Merging registries](#merging-registries)
 - [Skills](#skills)
-  - [Skill directory layout](#skill-directory-layout)
-  - [Discovering and using skills](#discovering-and-using-skills)
-  - [Running skill scripts](#running-skill-scripts)
 - [Development](#development)
 
 ## Features
 
-- Registration through a `@tools.action` decorator or explicit `Tool`
-  objects.
-- JSON Schema generation from plain Python function signatures or Pydantic
-  models — no need to hand-write schemas.
-- Runtime metadata such as action kind, human-readable status text, tags,
-  and arbitrary custom values, kept separate from the model-facing schema.
+- Registration through a `@tools.action` decorator — no hand-written JSON
+  Schema, for either plain function signatures or Pydantic models.
+- Runtime metadata (`kind`, `status`, `tags`, custom fields) and an
+  `requires_approval` flag, kept out of the model-facing schema but readable
+  by the host loop that dispatches calls.
 - Context-based dependency injection (`Inject[T]`) so tools can receive
   application services without the model ever seeing them.
 - Conditional tool availability and dynamic, context-aware descriptions.
@@ -68,16 +55,14 @@ Requires Python 3.12–3.14. Modules that use forward references should add
 
 ## Quickstart
 
+This is the shape of code you actually write and run — define tools with
+the decorator, hand their schema to the model, execute whichever call it
+makes, and feed the result back:
+
 ```python
 from pydantic import BaseModel, Field
 
-from agenttoolkit import (
-    ActionResult,
-    Inject,
-    ToolContext,
-    Tools,
-    ToolSchemaFormat,
-)
+from agenttoolkit import ActionResult, Inject, ToolContext, Tools, ToolSchemaFormat
 
 
 class SearchParams(BaseModel):
@@ -96,77 +81,96 @@ tools = Tools(context=ToolContext(SearchClient()))
 @tools.action(
     "Search the connected knowledge base.",
     params=SearchParams,
-    kind="read",
     status="Searching for {query}...",
-    tags=["search"],
-    metadata={"requires_network": True},
 )
-async def search(
-    params: SearchParams,
-    client: Inject[SearchClient],
-) -> list[str]:
-    matches = await client.search(params.query, params.limit)
-    return matches
+async def search(params: SearchParams, client: Inject[SearchClient]) -> list[str]:
+    return await client.search(params.query, params.limit)
 
 
-anthropic_schemas = tools.get_schema(ToolSchemaFormat.ANTHROPIC)
+# 1. Send the schema to the model.
+schema = tools.get_schema(ToolSchemaFormat.ANTHROPIC)
 
-result = await tools.execute("search", {"query": "tool middleware"})
+# 2. The model asks to call "search" with {"query": "tool middleware"}.
+result: ActionResult[object] = await tools.execute(
+    "search", {"query": "tool middleware"}
+)
+
+# 3. Feed the outcome back to the model.
 if result.ok:
     matches = result.result
+else:
+    error_message = result.error
 ```
+
+`tools.execute(...)` never raises for expected failures — an unknown tool
+name, invalid arguments, or an exception inside the tool all come back as a
+failed `ActionResult`, ready to hand to the model as-is.
 
 ## Defining tools
 
-### Plain function parameters
-
-Tools without a Pydantic model derive their schema from the function
-signature. Type hints become JSON Schema types; `Annotated[..., "text"]`
-supplies a field description.
+The `@tools.action(...)` decorator is the entire surface most code touches.
+Parameters come from a plain function signature or, for validation and
+richer schemas, a Pydantic model passed as `params=`:
 
 ```python
 @tools.action("Add two integers.")
 def add(a: int, b: int) -> int:
     return a + b
-```
-
-### Pydantic parameter models
-
-Pass `params=` to validate arguments against an explicit model. The model
-is matched to the function parameter whose annotation equals `params`, or —
-if there's exactly one non-injected parameter — passed positionally by
-keyword.
-
-```python
-class AddParams(BaseModel):
-    a: int
-    b: int = Field(description="Second addend")
 
 
-@tools.action("Add two integers.", params=AddParams)
-def add(params: AddParams) -> int:
-    return params.a + params.b
-```
+class RefundParams(BaseModel):
+    order_id: str
+    amount: float = Field(gt=0, description="Amount to refund, in USD")
 
-### Registering `Tool` objects directly
 
-`@tools.action` is sugar over constructing a `Tool` and calling
-`tools.register(...)`. Build one directly when you need to construct tools
-programmatically:
-
-```python
-from agenttoolkit import Tool, ToolMetadata
-
-tool = Tool(
-    name="add",
-    description="Add two integers.",
-    fn=add,
-    param_model=AddParams,
-    metadata=ToolMetadata(kind="compute"),
+@tools.action(
+    "Issue a refund for an order.",
+    params=RefundParams,
+    kind="write",
+    status="Refunding {amount} for order {order_id}...",
+    tags=["billing", "write"],
+    requires_approval=True,
+    metadata={"owner": "billing-team"},
 )
-tools.register(tool)  # raises if "add" is already registered
-tools.register(tool, replace=True)  # overwrite an existing registration
+def refund(params: RefundParams, client: Inject[BillingClient]) -> str:
+    client.refund(params.order_id, params.amount)
+    return "refunded"
 ```
+
+None of `kind`, `status`, `tags`, `requires_approval`, or `metadata` are
+visible to the model — they never appear in the generated JSON Schema. They
+exist for the host loop that dispatches the call:
+
+- `kind` — a free-form category (e.g. `"read"`, `"write"`), readable as
+  `tool.kind`.
+- `status` — a human-readable status message, either a `str.format`
+  template referencing parameter names or a `Callable[[BaseModel], str]`
+  for more complex formatting. Render it with `tool.format_status(args)`
+  (e.g. to show "Refunding 20.0 for order o-123..." while the call runs).
+- `tags` — a `frozenset[str]` for grouping or filtering tools, readable as
+  `tool.tags`.
+- `metadata` — an arbitrary read-only mapping for anything else the host
+  application needs, readable as `tool.extra`.
+- `requires_approval` — readable as `tool.requires_approval`; check it
+  before calling `tools.execute(...)` if the action needs user
+  confirmation first. `agenttoolkit` does not enforce approval itself.
+
+```python
+tool = tools.get("refund")
+tool.kind               # "write"
+tool.tags                # frozenset({"billing", "write"})
+tool.extra["owner"]      # "billing-team"
+tool.requires_approval   # True
+tool.format_status({"order_id": "o-123", "amount": 20.0})
+# "Refunding 20.0 for order o-123..."
+```
+
+`status` is validated against `params` at registration time, so a typo in
+a placeholder name (`"{amout}"`) fails fast instead of at call time.
+
+Constructing a `Tool` directly (`from agenttoolkit import Tool, ToolMetadata`)
+and calling `tools.register(tool)` is available for building tools
+programmatically, but is rarely needed — prefer the decorator.
 
 ## Dependency injection with `ToolContext`
 
@@ -185,8 +189,8 @@ tools.set_context(context)
 
 ```python
 context.provide(extra_service)  # append more dependencies
-context.without(SearchClient)  # drop instances of a type
-context.clear()  # remove everything
+context.without(SearchClient)   # drop instances of a type
+context.clear()                 # remove everything
 ```
 
 If an `Inject[T]` parameter has no default and no matching dependency is
@@ -196,36 +200,24 @@ passing `None`.
 ## Conditional availability and descriptions
 
 Use `provided(...)` and `requires(...)` to expose a tool only when its
-dependency is present (and, optionally, satisfies a predicate):
+dependency is present (and, optionally, satisfies a predicate). Predicates
+compose with `&`, `|`, and `~`:
 
 ```python
 from agenttoolkit import provided, requires
 
 
 @tools.action(
-    "Look up account balance.",
-    available_when=provided(BankingClient),
+    "Issue a refund (admin only).",
+    available_when=provided(BillingClient)
+    & requires(UserInfo, predicate=lambda user: user.is_admin),
 )
-def balance() -> float: ...
-
-
-@tools.action(
-    "Issue a refund.",
-    available_when=requires(BankingClient, predicate=lambda c: c.is_admin),
-)
-def refund(amount: float) -> None: ...
-```
-
-`ToolAvailability` predicates compose with `&`, `|`, and `~`:
-
-```python
-available_when = provided(BankingClient) & ~requires(
-    BankingClient, predicate=lambda c: c.read_only
-)
+def refund(order_id: str, amount: float) -> str: ...
 ```
 
 Use `description_from_context(...)` when a tool's description itself should
-depend on context (e.g. embedding a resolved account name):
+depend on context (e.g. embedding a resolved account name), with a fallback
+for when the dependency isn't provided:
 
 ```python
 from agenttoolkit import description_from_context
@@ -241,34 +233,34 @@ description = description_from_context(
 def balance() -> float: ...
 ```
 
-## Schema generation
+## Driving an agent loop
 
 `Tools.get_schema(...)` returns the schema for every tool available in the
-active (or given) context, in native, OpenAI, or Anthropic form:
+active (or a given) context; `Tools.execute(...)` dispatches a model-produced
+call:
 
 ```python
-native_schemas = tools.get_schema()
 openai_schemas = tools.get_schema(ToolSchemaFormat.OPENAI)
 anthropic_schemas = tools.get_schema(ToolSchemaFormat.ANTHROPIC)
-```
 
-`Tools.available(context=...)` returns the underlying `Tool` objects instead
-of schemas, e.g. for building a custom catalog.
-
-The standalone `build_schema(func, param_model=...)` helper produces the raw
-JSON Schema for a callable or model without constructing a `Tool`.
-
-## Executing tool calls
-
-```python
 result = await tools.execute("search", {"query": "tool middleware"}, context=context)
 ```
 
-`execute` runs the call through the middleware chain: tool resolution,
-argument validation against the tool's parameter model, dependency
-injection, invocation (sync or async), and error handling. It always
-returns an `ActionResult`, never raises for expected failures (unknown
-tool name, invalid arguments, exceptions inside the tool).
+A typical loop confirms approval-gated tools before executing, and reports
+status while a call is in flight:
+
+```python
+tool = tools.get(name)
+if tool is not None and tool.requires_approval and not confirm(name, arguments):
+    result = ActionResult.fail("Declined by user")
+else:
+    print(tool.format_status(arguments) if tool else name)
+    result = await tools.execute(name, arguments, context=context)
+```
+
+`Tools.available(context=...)` returns the underlying `Tool` objects instead
+of schemas — handy for printing a catalog of what's currently exposed
+(`tool.name`, `tool.resolve_description(context)`, `tool.kind`, ...).
 
 ## Results (`ActionResult`)
 
@@ -280,9 +272,8 @@ class ActionResult[ResultT](BaseModel):
 ```
 
 Raw tool return values are wrapped as successful results automatically. A
-tool may instead return an `ActionResult` directly (e.g. to set `error`
-with `ok=True`, or to populate custom subclass fields) — `Tools.execute`
-passes such a return value through unchanged.
+tool may instead return an `ActionResult` directly — e.g. to fail without
+raising, or to populate a typed result:
 
 ```python
 WeatherActionResult = ActionResult[WeatherResult]
@@ -295,20 +286,16 @@ def get_weather(city: str) -> WeatherActionResult:
     return WeatherActionResult.success(WeatherResult(city=city, temp_c=temp_c))
 ```
 
-Binding the parametrized model once keeps annotations and return statements
-compact. This is an application-level alias; it does not create a new toolkit
-result type.
-
 Because tool dispatch by name is dynamic and a registry can contain
-heterogeneous return types, `Tools.execute()` returns `ActionResult[object]`;
-narrow `result` at the call site or return a specialized `ActionResult`
-directly from the tool.
+heterogeneous return types, `Tools.execute()` always returns
+`ActionResult[object]`; narrow `result` at the call site, or return a
+specialized `ActionResult` directly from the tool as above.
 
-### Typed and project-specific results
-
-`ActionResult` rejects unknown fields. When an agent framework or application
-needs additional result fields, define them in a typed project-level subclass
-and wire it up via `Tools(result_type=...)`:
+`ActionResult` rejects unknown fields. When an application needs additional
+result fields (trace IDs, citations, usage info), define them in a typed
+subclass and wire it up via `Tools(result_type=...)` — every result the
+middleware chain produces (validation failures, unknown-tool errors, the
+internal-error fallback) is then built through that subclass too:
 
 ```python
 class ProjectActionResult[ResultT](ActionResult[ResultT]):
@@ -319,37 +306,11 @@ class ProjectActionResult[ResultT](ActionResult[ResultT]):
 tools = Tools(result_type=ProjectActionResult[object])
 ```
 
-Prefer this project-level subclass over adding framework-specific fields to
-`agenttoolkit.ActionResult`. Fields such as trace identifiers, citations, usage
-information, or UI hints then remain owned by the application while retaining
-static typing and Pydantic validation.
-
-Every result produced by the built-in middleware chain (validation
-failures, unknown-tool errors, the generic internal error on unexpected
-exceptions) is constructed via this configured `result_type`.
-
 ## Middleware
 
-### Built-in middleware chain
-
-By default, every call passes through:
-
-1. `ErrorBoundaryMiddleware` — catches unexpected exceptions, logs them with
-   their traceback, and returns a generic internal error result instead of
-   propagating.
-2. `ToolResolutionMiddleware` — resolves the tool by name and checks
-   `available_when`; unknown or unavailable tools fail with the list of
-   currently available tool names.
-3. `ParamValidationMiddleware` — validates raw arguments against the tool's
-   input model, turning a `ValidationError` into a failed `ActionResult`.
-4. `CallLoggingMiddleware` — logs each call's arguments and outcome
-   (name, ok/fail, elapsed time), unless custom middleware is supplied.
-
-### Writing custom middleware
-
-Pass `middleware=` to `Tools(...)` to run additional middleware *before*
-the built-in core (error boundary → resolution → validation). Subclass
-`ToolMiddleware` and inspect or wrap the `ToolCall`:
+Every call passes through a fixed core — error boundary, tool resolution,
+argument validation — plus logging by default. Pass `middleware=` to run
+additional steps *before* that core, e.g. a timeout:
 
 ```python
 from agenttoolkit import ToolCall, ToolMiddleware
@@ -366,35 +327,8 @@ class TimeoutMiddleware(ToolMiddleware):
 tools = Tools(middleware=[TimeoutMiddleware(5.0)])
 ```
 
-Supplying `middleware=` replaces the default `CallLoggingMiddleware` step;
-add your own logging middleware to the list if you still want it.
-
-## Tool metadata
-
-`ToolMetadata` carries runtime hints that do not belong in the model-facing
-schema:
-
-- `kind` — a free-form category (e.g. `"read"`, `"write"`, `"compute"`).
-- `status` — a human-readable status message, either a `str.format`
-  template referencing parameter names (`"Searching for {query}..."`) or a
-  `Callable[[BaseModel], str]` for more complex formatting. Validated at
-  registration time against the tool's parameter model.
-- `tags` — a `frozenset[str]` for grouping or filtering tools.
-- `extra` — an arbitrary read-only mapping for application-specific values.
-
-```python
-tool.metadata.kind
-tool.metadata.tags
-tool.format_status(params)  # renders the status template/callable
-```
-
-## Approval-gated tools
-
-Set `requires_approval=True` on `@tools.action` (or `Tool(...)`) to mark a
-tool as requiring application-level approval before execution. The flag
-defaults to `False` and is purely informational — `agenttoolkit` does not
-enforce approval itself; check `tool.requires_approval` in your own
-call-handling code before invoking `Tools.execute`.
+Supplying `middleware=` replaces the default logging step; add your own
+logging middleware to the list if you still want it.
 
 ## Merging registries
 
@@ -402,7 +336,7 @@ Combine tools from multiple `Tools` instances — e.g. when composing a
 registry from several feature modules:
 
 ```python
-tools.merge(other_tools)  # raises on name collisions
+tools.merge(other_tools)               # raises on name collisions
 tools.merge(other_tools, replace=True)  # other_tools wins on collisions
 ```
 
@@ -411,9 +345,7 @@ tools.merge(other_tools, replace=True)  # other_tools wins on collisions
 Local Agent Skills are discovered from directories containing one
 subdirectory per skill, each with a `SKILL.md` file using YAML frontmatter
 (`name`, `description`, and optional `license`, `compatibility`, `metadata`,
-`allowed-tools`) followed by Markdown instructions.
-
-### Skill directory layout
+`allowed-tools`) followed by Markdown instructions:
 
 ```
 skills/
@@ -428,8 +360,6 @@ skills/
 `name` must be 1–64 lowercase letters, numbers, or hyphens, and must match
 its parent directory name.
 
-### Discovering and using skills
-
 ```python
 from agenttoolkit import Skills
 
@@ -441,8 +371,11 @@ system_prompt = f"You are helpful.\n\n{skills.catalog()}"
 # Progressive loading: full instructions + file listing for one skill...
 instructions = skills.load("internet-research")
 
-# ...then read a specific resource on demand.
+# ...then read a specific resource, or run a bundled script, on demand.
 resource = skills.read_resource("internet-research", "references/guide.md")
+output = await skills.run_script(
+    "internet-research", "scripts/search.py", args=["python packaging"]
+)
 ```
 
 `Skills.from_local_dir` accepts multiple directories; a skill discovered
@@ -451,23 +384,12 @@ a warning). `SKILL.md` is re-parsed from disk on each `load`/`get`, so
 instructions can be edited without restarting the process.
 
 Resource paths are confined to the selected skill's directory — absolute
-paths and traversal outside the skill directory are rejected. Skill
-directories and their scripts must still be treated as trusted code.
-
-### Running skill scripts
-
-```python
-output = await skills.run_script(
-    "internet-research", "scripts/search.py", args=["python packaging"]
-)
-```
-
-Scripts run directly via their interpreter (no shell), with a configurable
-timeout (default 60s, `run_script(..., timeout=...)`). `.py` scripts run
-under the current Python interpreter; `.sh`/`.bash` scripts require `bash`
-on `PATH`. Output is the process's stdout on success, or an `Error: ...` /
-`Error (exit code N): ...` string on failure or timeout — this call never
-raises for script failures.
+paths and traversal outside it are rejected. Scripts run directly via their
+interpreter (no shell) with a configurable timeout (default 60s); `.py`
+scripts use the current Python interpreter, `.sh`/`.bash` require `bash` on
+`PATH`. `run_script` never raises for script failures — it returns the
+process's stdout, or an `Error: ...` string. Skill directories and their
+scripts must still be treated as trusted code.
 
 ## Development
 
