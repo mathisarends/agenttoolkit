@@ -22,6 +22,7 @@ it is a building block, not a framework.
 - [Merging registries](#merging-registries)
 - [Skills](#skills)
 - [Development](#development)
+- [License](#license)
 
 ## Features
 
@@ -405,3 +406,10 @@ The test command measures branch coverage for `agenttoolkit` and fails
 below 90%. Dependabot groups Python dependency updates into one weekly pull
 request; the same CI matrix validates every update on Python 3.12, 3.13,
 and 3.14.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution workflow
+and conventions.
+
+## License
+
+MIT — see [LICENSE.md](LICENSE.md).
