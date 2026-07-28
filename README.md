@@ -108,3 +108,17 @@ register_skill_tools(tools)
 bundled code. Resource paths are confined to the selected skill directory and
 scripts run directly without a shell, but skill directories and their scripts
 must still be treated as trusted code.
+
+## Development
+
+Install the locked development environment and run all quality checks:
+
+```console
+uv sync --locked
+uv run --locked ruff check .
+uv run --locked pytest
+```
+
+The test command measures branch coverage for `agenttoolkit` and fails below
+90%. Dependabot groups Python dependency updates into one weekly pull request;
+the same CI matrix validates every update on Python 3.12, 3.13, and 3.14.

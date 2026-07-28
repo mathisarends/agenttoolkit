@@ -13,6 +13,7 @@ dependencies = [
 dev = [
     "pytest>=9.0",
     "pytest-asyncio>=1.0",
+    "pytest-cov>=6.0",
     "ruff>=0.9",
 ]
 
@@ -26,3 +27,29 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "RUF", "UP"]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "--cov=agenttoolkit",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-fail-under=90",
+]
+asyncio_mode = "strict"
+testpaths = ["tests"]
+xfail_strict = true
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["agenttoolkit"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+show_missing = true
+skip_covered = true
