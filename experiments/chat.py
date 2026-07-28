@@ -1,5 +1,6 @@
 import asyncio
 import datetime as dt
+import sys
 from dataclasses import dataclass
 
 from llmify import ChatCodex
@@ -92,6 +93,26 @@ def divide(a: float, b: float) -> float:
     return a / b
 
 
+# 8. Tool that builds its own typed ActionResult[ResultT] instead of letting
+#    Tools wrap a plain return value. `result.result` is statically typed as
+#    `WeatherResult | None` for callers, and `error` is populated on failure
+#    instead of an exception propagating.
+_KNOWN_CITIES = {"berlin": 18.0, "hamburg": 15.5, "muenchen": 21.0}
+
+
+class WeatherResult(BaseModel):
+    city: str
+    temp_c: float
+
+
+@tools.action("Get the current weather for a known city")
+def get_weather(city: str) -> ActionResult[WeatherResult]:
+    temp_c = _KNOWN_CITIES.get(city.lower())
+    if temp_c is None:
+        return ActionResult[WeatherResult].fail(f"Unknown city: {city!r}")
+    return ActionResult[WeatherResult].success(WeatherResult(city=city, temp_c=temp_c))
+
+
 def _print_registered_tools() -> None:
     print("Registered tools (available in current context):")
     for tool in tools.available():
@@ -125,6 +146,7 @@ def _confirm(name: str, arguments: dict) -> bool:
 
 
 async def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
     model = ChatCodex.from_codex_cli(model="gpt-5.6-terra")
     agent = Agent(
         model,

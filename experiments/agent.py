@@ -10,8 +10,16 @@ from llmify import (
     ToolResultMessage,
     UserMessage,
 )
+from pydantic import BaseModel
 
 from agenttoolkit.tools import ActionResult, Tools, ToolSchemaFormat
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    return str(value)
+
 
 OnToolCall = Callable[[str, dict[str, Any]], None]
 OnToolResult = Callable[[str, ActionResult], None]
@@ -81,6 +89,6 @@ class Agent:
                 self._messages.append(
                     ToolResultMessage(
                         tool_call_id=call.id,
-                        content=json.dumps(payload),
+                        content=json.dumps(payload, default=_json_default),
                     )
                 )
