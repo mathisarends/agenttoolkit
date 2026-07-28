@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import inspect
 from collections.abc import Callable
 from typing import Annotated, Any, get_args, get_origin, get_type_hints
