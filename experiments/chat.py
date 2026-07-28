@@ -105,12 +105,15 @@ class WeatherResult(BaseModel):
     temp_c: float
 
 
+WeatherActionResult = ActionResult[WeatherResult]
+
+
 @tools.action("Get the current weather for a known city")
-def get_weather(city: str) -> ActionResult[WeatherResult]:
+def get_weather(city: str) -> WeatherActionResult:
     temp_c = _KNOWN_CITIES.get(city.lower())
     if temp_c is None:
-        return ActionResult[WeatherResult].fail(f"Unknown city: {city!r}")
-    return ActionResult[WeatherResult].success(WeatherResult(city=city, temp_c=temp_c))
+        return WeatherActionResult.fail(f"Unknown city: {city!r}")
+    return WeatherActionResult.success(WeatherResult(city=city, temp_c=temp_c))
 
 
 def _print_registered_tools() -> None:

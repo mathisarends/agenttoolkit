@@ -324,7 +324,7 @@ aber der Erweiterungspunkt neu festgelegt werden:
   zusätzlicher Top-Level-Felder;
 - plus eine Result-Factory für die Error Boundary.
 
-## Offene Entscheidung
+## Entscheidungsgrundlage
 
 Die zentrale Abwägung lautet:
 
@@ -333,5 +333,13 @@ Die zentrale Abwägung lautet:
 - Ist maximale Typpräzision und die schönste Tool-Implementierung wichtiger?
   Dann Möglichkeit 4 mit bewusst größerem Refactoring.
 
-Bis diese Entscheidung getroffen ist, sollte keine weitere Result-API implementiert
-werden.
+## Entscheidung
+
+Die Library-API bleibt unverändert. Anwendungen verwenden:
+
+- einen lokalen Alias wie `WeatherActionResult = ActionResult[WeatherResult]`,
+  wenn nur der Payload-Typ spezialisiert wird;
+- eine konkrete oder generische Unterklasse, wenn das Projekt zusätzliche
+  typisierte Felder benötigt.
+
+Beide Muster werden direkt an `ActionResult` und in der README dokumentiert.

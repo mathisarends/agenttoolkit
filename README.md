@@ -164,7 +164,7 @@ tool = Tool(
     param_model=AddParams,
     metadata=ToolMetadata(kind="compute"),
 )
-tools.register(tool)              # raises if "add" is already registered
+tools.register(tool)  # raises if "add" is already registered
 tools.register(tool, replace=True)  # overwrite an existing registration
 ```
 
@@ -184,9 +184,9 @@ tools.set_context(context)
 `T` (or a subclass), searching in reverse insertion order. Useful mutators:
 
 ```python
-context.provide(extra_service)     # append more dependencies
-context.without(SearchClient)      # drop instances of a type
-context.clear()                    # remove everything
+context.provide(extra_service)  # append more dependencies
+context.without(SearchClient)  # drop instances of a type
+context.clear()  # remove everything
 ```
 
 If an `Inject[T]` parameter has no default and no matching dependency is
@@ -201,11 +201,13 @@ dependency is present (and, optionally, satisfies a predicate):
 ```python
 from agenttoolkit import provided, requires
 
+
 @tools.action(
     "Look up account balance.",
     available_when=provided(BankingClient),
 )
 def balance() -> float: ...
+
 
 @tools.action(
     "Issue a refund.",
@@ -217,7 +219,9 @@ def refund(amount: float) -> None: ...
 `ToolAvailability` predicates compose with `&`, `|`, and `~`:
 
 ```python
-available_when=provided(BankingClient) & ~requires(BankingClient, predicate=lambda c: c.read_only)
+available_when = provided(BankingClient) & ~requires(
+    BankingClient, predicate=lambda c: c.read_only
+)
 ```
 
 Use `description_from_context(...)` when a tool's description itself should
@@ -231,6 +235,7 @@ description = description_from_context(
     render=lambda client: f"Look up the balance for {client.account_name}.",
     fallback="Look up account balance.",
 )
+
 
 @tools.action(description)
 def balance() -> float: ...
@@ -280,9 +285,19 @@ with `ok=True`, or to populate custom subclass fields) — `Tools.execute`
 passes such a return value through unchanged.
 
 ```python
-typed_result = ActionResult[list[str]].success(["first", "second"])
-failed_result = ActionResult[list[str]].fail("no matches")
+WeatherActionResult = ActionResult[WeatherResult]
+
+
+def get_weather(city: str) -> WeatherActionResult:
+    temp_c = KNOWN_CITIES.get(city.lower())
+    if temp_c is None:
+        return WeatherActionResult.fail(f"Unknown city: {city!r}")
+    return WeatherActionResult.success(WeatherResult(city=city, temp_c=temp_c))
 ```
+
+Binding the parametrized model once keeps annotations and return statements
+compact. This is an application-level alias; it does not create a new toolkit
+result type.
 
 Because tool dispatch by name is dynamic and a registry can contain
 heterogeneous return types, `Tools.execute()` returns `ActionResult[object]`;
@@ -291,8 +306,9 @@ directly from the tool.
 
 ### Typed and project-specific results
 
-`ActionResult` rejects unknown fields, so project-specific data belongs in a
-typed subclass, wired up via `Tools(result_type=...)`:
+`ActionResult` rejects unknown fields. When an agent framework or application
+needs additional result fields, define them in a typed project-level subclass
+and wire it up via `Tools(result_type=...)`:
 
 ```python
 class ProjectActionResult[ResultT](ActionResult[ResultT]):
@@ -302,6 +318,11 @@ class ProjectActionResult[ResultT](ActionResult[ResultT]):
 
 tools = Tools(result_type=ProjectActionResult[object])
 ```
+
+Prefer this project-level subclass over adding framework-specific fields to
+`agenttoolkit.ActionResult`. Fields such as trace identifiers, citations, usage
+information, or UI hints then remain owned by the application while retaining
+static typing and Pydantic validation.
 
 Every result produced by the built-in middleware chain (validation
 failures, unknown-tool errors, the generic internal error on unexpected
@@ -381,8 +402,8 @@ Combine tools from multiple `Tools` instances — e.g. when composing a
 registry from several feature modules:
 
 ```python
-tools.merge(other_tools)                 # raises on name collisions
-tools.merge(other_tools, replace=True)   # other_tools wins on collisions
+tools.merge(other_tools)  # raises on name collisions
+tools.merge(other_tools, replace=True)  # other_tools wins on collisions
 ```
 
 ## Skills
@@ -436,7 +457,9 @@ directories and their scripts must still be treated as trusted code.
 ### Running skill scripts
 
 ```python
-output = await skills.run_script("internet-research", "scripts/search.py", args=["python packaging"])
+output = await skills.run_script(
+    "internet-research", "scripts/search.py", args=["python packaging"]
+)
 ```
 
 Scripts run directly via their interpreter (no shell), with a configurable

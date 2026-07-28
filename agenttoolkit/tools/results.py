@@ -4,6 +4,22 @@ from pydantic import BaseModel, ConfigDict
 
 
 class ActionResult[ResultT](BaseModel):
+    """Generic tool result intended for application-level specialization.
+
+    Bind a parametrized model to a local name when only its payload type changes::
+
+        WeatherActionResult = ActionResult[WeatherResult]
+
+    Subclass a parametrized model when an application or agent framework needs
+    additional typed fields::
+
+        class ProjectActionResult[ResultT](ActionResult[ResultT]):
+            trace_id: str | None = None
+
+    Pass that subclass to ``Tools(result_type=ProjectActionResult[object])`` so
+    automatically wrapped values and middleware failures use the same envelope.
+    """
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     ok: bool

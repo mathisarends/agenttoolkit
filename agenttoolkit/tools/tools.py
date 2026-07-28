@@ -144,7 +144,7 @@ class Tools:
             )
         )
 
-    def merge(self, other: Tools, *, replace: bool = False) -> None:
+    def merge(self, other: "Tools", *, replace: bool = False) -> None:
         for tool in other:
             self.register(tool, replace=replace)
 
