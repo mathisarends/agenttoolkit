@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import Any
 
-if TYPE_CHECKING:
-    from .context import ToolContext
+from agenttoolkit.tools.context import ToolContext
 
 
 class ToolDescription:
-    """Resolves a tool description from the active invocation context."""
-
     def __init__(
         self,
         dependency: type,
-        render: Callable[[object], str],
+        render: Callable[[Any], str],
         default: str,
     ) -> None:
         self._dependency = dependency
@@ -26,8 +23,6 @@ class ToolDescription:
 
 
 class ToolAvailability:
-    """A composable predicate controlling whether a tool is exposed."""
-
     def __init__(self, predicate: Callable[[ToolContext | None], bool]) -> None:
         self._predicate = predicate
 
@@ -50,7 +45,7 @@ def described[T](
     render: Callable[[T], str],
     default: str,
 ) -> ToolDescription:
-    return ToolDescription(dependency, render, default)  # type: ignore[arg-type]
+    return ToolDescription(dependency, render, default)
 
 
 def provided(dependency: type) -> ToolAvailability:

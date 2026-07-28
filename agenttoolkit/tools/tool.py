@@ -11,9 +11,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .binding import ToolAvailability, ToolDescription
-from .context import ToolContext
-from .schema import ToolSchema, _schema_model
+from agenttoolkit.tools.binding import ToolAvailability, ToolDescription
+from agenttoolkit.tools.context import ToolContext
+from agenttoolkit.tools.schema import ToolSchema, _schema_model
 
 
 class ActionKind(StrEnum):
@@ -50,8 +50,6 @@ class ToolMetadata:
 
 
 class Tool:
-    """A callable together with its schema, context rules, and runtime metadata."""
-
     def __init__(
         self,
         name: str,
@@ -127,15 +125,16 @@ class Tool:
         return await result if inspect.isawaitable(result) else result
 
     def format_status(self, args: BaseModel | Mapping[str, Any]) -> str | None:
-        if self.status is None:
+        status = self.status
+        if status is None:
             return None
-        if callable(self.status):
+        if not isinstance(status, str):
             model = (
                 args
                 if isinstance(args, BaseModel)
                 else self.input_model.model_validate(dict(args))
             )
-            return self.status(model)
+            return status(model)
 
         values = (
             args.model_dump(exclude_none=True)
@@ -143,9 +142,9 @@ class Tool:
             else dict(args)
         )
         try:
-            return self.status.format(**values)
+            return status.format(**values)
         except KeyError:
-            return self.status
+            return status
 
     def _validate_status(self) -> None:
         status = self.status

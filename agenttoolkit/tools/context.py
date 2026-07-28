@@ -17,15 +17,11 @@ if TYPE_CHECKING:
 else:
 
     class Inject:
-        """Marks a function parameter as supplied by :class:`ToolContext`."""
-
         def __class_getitem__(cls, item: Any) -> Any:
             return Annotated[item, _INJECT_MARKER]
 
 
 class ToolContext:
-    """A small, type-based dependency container used while invoking tools."""
-
     def __init__(self, *dependencies: Any) -> None:
         self._dependencies = [item for item in dependencies if item is not None]
 

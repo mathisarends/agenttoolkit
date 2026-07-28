@@ -8,9 +8,9 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from .context import ToolContext
-from .results import ActionResult
-from .tool import Tool
+from agenttoolkit.tools.context import ToolContext
+from agenttoolkit.tools.results import ActionResult
+from agenttoolkit.tools.tool import Tool
 
 logger = logging.getLogger(__name__)
 

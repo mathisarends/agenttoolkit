@@ -22,7 +22,7 @@ from agenttoolkit import (
     ActionResult,
     Inject,
     ToolContext,
-    ToolRegistry,
+    Tools,
     ToolSchemaFormat,
 )
 
@@ -37,7 +37,7 @@ class SearchClient:
         return [query] * limit
 
 
-tools = ToolRegistry(context=ToolContext(SearchClient()))
+tools = Tools(context=ToolContext(SearchClient()))
 
 
 @tools.action(
@@ -81,3 +81,31 @@ def add(a: int, b: int) -> int:
 Use `provided(...)`, `requires(...)`, and `described(...)` when schema exposure
 or descriptions depend on the active `ToolContext`. Custom middleware subclasses
 `ToolMiddleware` and can inspect or wrap each `ToolCall`.
+
+## Skills
+
+Local Agent Skills are discovered from directories containing one subdirectory
+per skill and a `SKILL.md` in each:
+
+```python
+from agenttoolkit import Skills, ToolContext, Tools, register_skill_tools
+
+skills = Skills.from_local_dir("./skills")
+
+# Put the compact catalog in the agent's system prompt.
+system_prompt = f"You are helpful.\n\n{skills.catalog()}"
+
+# Progressive loading is available directly...
+instructions = skills.load("internet-research")
+resource = skills.read_resource("internet-research", "references/guide.md")
+
+# ...or through explicitly registered agent tools.
+tools = Tools(context=ToolContext(skills))
+register_skill_tools(tools)
+```
+
+`register_skill_tools` adds `load_skill`, `read_skill_resource`, and
+`run_skill_script`. Pass `include_scripts=False` when the agent must not execute
+bundled code. Resource paths are confined to the selected skill directory and
+scripts run directly without a shell, but skill directories and their scripts
+must still be treated as trusted code.

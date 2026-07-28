@@ -6,12 +6,10 @@ from typing import Annotated, Any, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel, ConfigDict, create_model
 
-from .context import _INJECT_MARKER
+from agenttoolkit.tools.context import _INJECT_MARKER
 
 
 class ToolSchema(BaseModel):
-    """Canonical function-tool schema with lightweight provider adapters."""
-
     name: str
     description: str
     parameters: dict[str, Any]
@@ -35,7 +33,6 @@ def build_schema(
     *,
     param_model: type[BaseModel] | None = None,
 ) -> dict[str, Any]:
-    """Build JSON Schema from a callable or an explicit Pydantic model."""
     return _schema_model(func, param_model=param_model).model_json_schema(
         mode="validation"
     )
@@ -56,7 +53,8 @@ def _schema_model(
 def _model_from_callable(func: Callable) -> type[BaseModel]:
     signature = inspect.signature(func)
     hints = get_type_hints(func, include_extras=True)
-    fields: dict[str, tuple[Any, Any]] = {}
+    function_name = getattr(func, "__name__", type(func).__name__)
+    fields: dict[str, Any] = {}
     descriptions: dict[str, str] = {}
 
     for name, parameter in signature.parameters.items():
@@ -69,7 +67,7 @@ def _model_from_callable(func: Callable) -> type[BaseModel]:
             inspect.Parameter.VAR_POSITIONAL,
             inspect.Parameter.VAR_KEYWORD,
         }:
-            raise TypeError(f"Tool '{func.__name__}' cannot use variadic parameters")
+            raise TypeError(f"Tool '{function_name}' cannot use variadic parameters")
 
         default = (
             ... if parameter.default is inspect.Parameter.empty else parameter.default
@@ -80,7 +78,7 @@ def _model_from_callable(func: Callable) -> type[BaseModel]:
             descriptions[name] = description
 
     model = create_model(
-        f"{func.__name__.title().replace('_', '')}Params",
+        f"{function_name.title().replace('_', '')}Params",
         __config__=ConfigDict(extra="forbid", arbitrary_types_allowed=True),
         **fields,
     )

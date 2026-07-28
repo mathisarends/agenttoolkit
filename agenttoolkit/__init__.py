@@ -1,5 +1,4 @@
-"""Reusable building blocks for tool-driven agents."""
-
+from .skills import Skill, Skills, parse_skill, register_skill_tools
 from .tools import (
     ActionKind,
     ActionResult,
@@ -12,7 +11,6 @@ from .tools import (
     ToolExecutionError,
     ToolMetadata,
     ToolMiddleware,
-    ToolRegistry,
     Tools,
     ToolSchema,
     ToolSchemaFormat,
@@ -26,6 +24,8 @@ __all__ = [
     "ActionKind",
     "ActionResult",
     "Inject",
+    "Skill",
+    "Skills",
     "Tool",
     "ToolAvailability",
     "ToolCall",
@@ -34,12 +34,13 @@ __all__ = [
     "ToolExecutionError",
     "ToolMetadata",
     "ToolMiddleware",
-    "ToolRegistry",
     "ToolSchema",
     "ToolSchemaFormat",
     "Tools",
     "build_schema",
     "described",
+    "parse_skill",
     "provided",
+    "register_skill_tools",
     "requires",
 ]

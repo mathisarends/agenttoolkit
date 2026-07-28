@@ -6,8 +6,6 @@ from typing import Any, Self
 
 @dataclass(frozen=True, slots=True)
 class ActionResult:
-    """Provider-neutral outcome of one tool invocation."""
-
     ok: bool
     value: Any = None
     error: str | None = None

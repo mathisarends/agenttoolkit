@@ -11,7 +11,7 @@ from agenttoolkit import (
     Inject,
     ToolContext,
     ToolExecutionError,
-    ToolRegistry,
+    Tools,
     ToolSchemaFormat,
     described,
     provided,
@@ -31,7 +31,7 @@ class SearchClient:
 @pytest.mark.asyncio
 async def test_register_validate_inject_and_execute() -> None:
     client = SearchClient("found:")
-    tools = ToolRegistry(context=ToolContext(client))
+    tools = Tools(context=ToolContext(client))
 
     @tools.action(
         "Search",
@@ -58,7 +58,7 @@ async def test_register_validate_inject_and_execute() -> None:
 
 @pytest.mark.asyncio
 async def test_plain_signature_is_validated_and_sync_result_is_wrapped() -> None:
-    tools = ToolRegistry()
+    tools = Tools()
 
     @tools.action("Add numbers")
     def add(a: int, b: int = 1) -> int:
@@ -72,7 +72,7 @@ async def test_plain_signature_is_validated_and_sync_result_is_wrapped() -> None
 
 
 def test_schema_is_provider_neutral_with_adapters() -> None:
-    tools = ToolRegistry()
+    tools = Tools()
 
     @tools.action("Search", params=SearchParams)
     def search(params: SearchParams) -> None:
@@ -94,7 +94,7 @@ def test_schema_is_provider_neutral_with_adapters() -> None:
 
 
 def test_annotated_description_is_included_in_callable_schema() -> None:
-    tools = ToolRegistry()
+    tools = Tools()
 
     @tools.action("Greet")
     def greet(name: Annotated[str, "Person to greet"]) -> None:
@@ -105,7 +105,7 @@ def test_annotated_description_is_included_in_callable_schema() -> None:
 
 
 def test_context_controls_availability_and_description() -> None:
-    tools = ToolRegistry()
+    tools = Tools()
 
     @tools.action(
         described(
@@ -127,7 +127,7 @@ def test_context_controls_availability_and_description() -> None:
 
 @pytest.mark.asyncio
 async def test_expected_and_unexpected_errors_are_separated() -> None:
-    tools = ToolRegistry()
+    tools = Tools()
 
     @tools.action("Fail safely")
     def safe_failure() -> None:
@@ -145,7 +145,7 @@ async def test_expected_and_unexpected_errors_are_separated() -> None:
 
 
 def test_duplicate_registration_and_status_validation() -> None:
-    tools = ToolRegistry()
+    tools = Tools()
 
     @tools.action("First")
     def duplicate() -> None:

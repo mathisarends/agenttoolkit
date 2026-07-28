@@ -5,13 +5,18 @@ from typing import Any, overload
 
 from pydantic import BaseModel
 
-from .arguments import resolve_arguments
-from .binding import ToolAvailability, ToolDescription
-from .context import ToolContext
-from .middleware import ToolCall, ToolMiddleware, compose, default_chain
-from .results import ActionResult
-from .schema import ToolSchema
-from .tool import (
+from agenttoolkit.tools.arguments import resolve_arguments
+from agenttoolkit.tools.binding import ToolAvailability, ToolDescription
+from agenttoolkit.tools.context import ToolContext
+from agenttoolkit.tools.middleware import (
+    ToolCall,
+    ToolMiddleware,
+    compose,
+    default_chain,
+)
+from agenttoolkit.tools.results import ActionResult
+from agenttoolkit.tools.schema import ToolSchema
+from agenttoolkit.tools.tool import (
     ActionKind,
     StatusFormatter,
     Tool,
@@ -20,9 +25,7 @@ from .tool import (
 )
 
 
-class ToolRegistry:
-    """Registers, exposes, and invokes provider-neutral function tools."""
-
+class Tools:
     def __init__(
         self,
         *,
@@ -48,9 +51,10 @@ class ToolRegistry:
         metadata: Mapping[str, Any] | None = None,
     ) -> Callable:
         def decorator(func: Callable) -> Callable:
+            function_name = getattr(func, "__name__", type(func).__name__)
             self.register(
                 Tool(
-                    name=name or func.__name__,
+                    name=name or function_name,
                     description=description,
                     fn=func,
                     param_model=params,
@@ -140,7 +144,7 @@ class ToolRegistry:
             )
         )
 
-    def merge(self, other: ToolRegistry, *, replace: bool = False) -> None:
+    def merge(self, other: Tools, *, replace: bool = False) -> None:
         for tool in other:
             self.register(tool, replace=replace)
 
@@ -158,6 +162,3 @@ class ToolRegistry:
         return (
             result if isinstance(result, ActionResult) else ActionResult.success(result)
         )
-
-
-Tools = ToolRegistry

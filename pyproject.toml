@@ -1,15 +1,28 @@
 [project]
 name = "agenttoolkit"
 version = "0.1.0"
-description = "Add your description here"
+description = "Provider-neutral tool definitions and execution for Python agents"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.4",
+    "pyyaml>=6.0.3",
 ]
 
-[project.optional-dependencies]
-llmify = ["py-llmify[openai]>=0.8.0"]
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.0",
+    "ruff>=0.9",
+]
 
-[tool.black]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
 line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "UP"]
