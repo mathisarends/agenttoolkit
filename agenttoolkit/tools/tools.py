@@ -1,7 +1,7 @@
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, overload
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from agenttoolkit.tools.arguments import resolve_arguments
 from agenttoolkit.tools.binding import ToolAvailability, ToolDescription
@@ -128,6 +128,57 @@ class Tools:
         if schema_format is ToolSchemaFormat.ANTHROPIC:
             return [schema.to_anthropic_schema() for schema in schemas]
         return schemas
+
+    @overload
+    def create_action_model[ModelT: BaseModel](
+        self,
+        include_actions: Iterable[str] | None = None,
+        *,
+        base_model: type[ModelT],
+        context: ToolContext | None = None,
+    ) -> list[type[ModelT]]: ...
+
+    @overload
+    def create_action_model(
+        self,
+        include_actions: Iterable[str] | None = None,
+        *,
+        context: ToolContext | None = None,
+    ) -> list[type[BaseModel]]: ...
+
+    def create_action_model(
+        self,
+        include_actions: Iterable[str] | None = None,
+        *,
+        base_model: type[BaseModel] = BaseModel,
+        context: ToolContext | None = None,
+    ) -> list[type[BaseModel]]:
+        """Build one structured-output model per available tool."""
+        included = None if include_actions is None else frozenset(include_actions)
+        models: list[type[BaseModel]] = []
+        active_context = self._context if context is None else context
+
+        for tool in self.available(context):
+            if included is not None and tool.name not in included:
+                continue
+            models.append(
+                create_model(
+                    f"{tool.name.title().replace('_', '')}ActionModel",
+                    __base__=base_model,
+                    __config__=ConfigDict(extra="forbid"),
+                    **{
+                        tool.name: (
+                            tool.input_model,
+                            Field(
+                                ...,
+                                description=tool.resolve_description(active_context),
+                            ),
+                        )
+                    },
+                )
+            )
+
+        return models
 
     async def execute(
         self,

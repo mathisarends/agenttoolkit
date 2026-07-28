@@ -4,7 +4,7 @@ import logging
 from typing import Annotated
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from agenttoolkit import (
     ActionResult,
@@ -101,6 +101,38 @@ def test_annotated_description_is_included_in_callable_schema() -> None:
 
     parameters = tools.get_schema()[0].parameters
     assert parameters["properties"]["name"]["description"] == "Person to greet"
+
+
+def test_action_models_support_structured_output_and_a_custom_base() -> None:
+    class StructuredAction(BaseModel):
+        request_id: str = "generated"
+
+    tools = Tools()
+
+    @tools.action("Search the documentation", params=SearchParams)
+    def search(params: SearchParams) -> None:
+        pass
+
+    @tools.action("Do nothing")
+    def noop() -> None:
+        pass
+
+    models = tools.create_action_model(
+        ["search"],
+        base_model=StructuredAction,
+    )
+
+    assert len(models) == 1
+    assert issubclass(models[0], StructuredAction)
+    action = models[0].model_validate({"search": {"query": "tools"}})
+    assert action.request_id == "generated"
+    assert action.search == SearchParams(query="tools")
+    assert models[0].model_json_schema()["properties"]["search"]["description"] == (
+        "Search the documentation"
+    )
+
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        models[0].model_validate({"search": {"query": "tools"}, "unexpected": True})
 
 
 def test_context_controls_availability_and_description() -> None:
