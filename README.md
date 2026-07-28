@@ -20,6 +20,7 @@ it is a building block, not a framework.
 - [Results (`ActionResult`)](#results-actionresult)
 - [Middleware](#middleware)
 - [Merging registries](#merging-registries)
+- [Filesystem and shell primitives](#filesystem-and-shell-primitives)
 - [Skills](#skills)
 - [Development](#development)
 - [License](#license)
@@ -41,6 +42,8 @@ it is a building block, not a framework.
   formats.
 - Generic `ActionResult` type so applications can add project-specific
   result fields without falling back to `Any`.
+- Async filesystem and shell ports with local, Docker, and Bubblewrap
+  implementations for common agent capabilities.
 - Local Agent Skills discovery and progressive loading, compatible with the
   `SKILL.md` convention.
 
@@ -340,6 +343,49 @@ registry from several feature modules:
 tools.merge(other_tools)               # raises on name collisions
 tools.merge(other_tools, replace=True)  # other_tools wins on collisions
 ```
+
+## Filesystem and shell primitives
+
+`agenttoolkit.builtins` contains raw async implementations rather than a
+predefined set of model-facing tools. Applications can use them directly,
+inject them through `ToolContext`, or expose only the operations appropriate
+for a particular agent.
+
+```python
+from agenttoolkit.builtins import (
+    DockerSandbox,
+    LocalWorkspace,
+    SandboxPolicy,
+)
+
+workspace = LocalWorkspace("./project")
+await workspace.write_file("src/example.py", "print('hello')\n")
+
+entries = await workspace.list_dir("src")
+source = await workspace.read_file(entries[0].path)
+
+policy = SandboxPolicy.for_workspace(
+    workspace.root,
+    writable=True,
+    enable_network_access=False,
+)
+sandbox = DockerSandbox("python:3.14-slim", policy)
+result = await sandbox.execute("python src/example.py")
+```
+
+The `Workspace` port provides `read_file`, `write_file`, `edit_file`, `glob`,
+`list_dir`, and `stat`. Exploration returns `Entry` values with a root-relative
+POSIX path, directory and symlink flags, size, and modification time. Local
+reads and writes are confined to the workspace root and bounded by a
+configurable file-size limit.
+
+The `Sandbox` port returns a common `SandboxResult` from all backends.
+`SandboxPolicy` controls readable and writable paths, network access,
+environment values, timeout, captured output, memory, process, and CPU limits.
+`DockerSandbox` enforces all of these resource limits; `BubblewrapSandbox`
+supports filesystem/network isolation and host-side timeout/output limits.
+`UnsafeLocalSandbox` is useful for trusted commands but deliberately does not
+claim to enforce path or network isolation.
 
 ## Skills
 

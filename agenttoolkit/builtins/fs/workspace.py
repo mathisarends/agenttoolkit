@@ -1,0 +1,342 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import stat
+import tempfile
+from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path, PurePath
+from typing import Protocol, runtime_checkable
+
+
+class WorkspaceError(Exception):
+    pass
+
+
+class PathOutsideWorkspaceError(WorkspaceError, ValueError):
+    pass
+
+
+class FileTooLargeError(WorkspaceError):
+    pass
+
+
+class EditError(WorkspaceError, ValueError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class Entry:
+    path: str
+    is_dir: bool
+    is_symlink: bool
+    size: int | None = None
+    modified: float | None = None
+
+
+@runtime_checkable
+class Workspace(Protocol):
+    @property
+    def root(self) -> Path: ...
+
+    async def read_file(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        encoding: str | None = None,
+    ) -> str: ...
+
+    async def write_file(
+        self,
+        path: str | os.PathLike[str],
+        content: str,
+        *,
+        encoding: str | None = None,
+        create_parents: bool = True,
+    ) -> None: ...
+
+    async def edit_file(
+        self,
+        path: str | os.PathLike[str],
+        old: str,
+        new: str,
+        *,
+        replace_all: bool = False,
+        encoding: str | None = None,
+    ) -> int: ...
+
+    async def glob(self, pattern: str) -> Sequence[Entry]: ...
+
+    async def list_dir(
+        self,
+        path: str | os.PathLike[str] = ".",
+        *,
+        recursive: bool = False,
+        limit: int | None = None,
+    ) -> Sequence[Entry]: ...
+
+    async def stat(
+        self,
+        path: str | os.PathLike[str],
+    ) -> Entry | None: ...
+
+
+class LocalWorkspace:
+    def __init__(
+        self,
+        root: str | os.PathLike[str],
+        *,
+        encoding: str = "utf-8",
+        max_file_bytes: int | None = 10 * 1024 * 1024,
+    ) -> None:
+        if max_file_bytes is not None and max_file_bytes < 1:
+            raise ValueError("max_file_bytes must be positive or None")
+
+        root_path = Path(root).expanduser()
+        if root_path.exists() and not root_path.is_dir():
+            raise NotADirectoryError(root_path)
+        root_path.mkdir(parents=True, exist_ok=True)
+
+        self._root = root_path.resolve()
+        self._encoding = encoding
+        self._max_file_bytes = max_file_bytes
+
+    @property
+    def root(self) -> Path:
+        return self._root
+
+    async def read_file(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        encoding: str | None = None,
+    ) -> str:
+        return await asyncio.to_thread(self._read_file, path, encoding)
+
+    def _read_file(
+        self,
+        path: str | os.PathLike[str],
+        encoding: str | None,
+    ) -> str:
+        target = self._resolve(path)
+        if not target.is_file():
+            raise FileNotFoundError(target)
+        self._check_size(target.stat().st_size)
+        return target.read_text(encoding=encoding or self._encoding)
+
+    async def write_file(
+        self,
+        path: str | os.PathLike[str],
+        content: str,
+        *,
+        encoding: str | None = None,
+        create_parents: bool = True,
+    ) -> None:
+        await asyncio.to_thread(
+            self._write_file,
+            path,
+            content,
+            encoding,
+            create_parents,
+        )
+
+    def _write_file(
+        self,
+        path: str | os.PathLike[str],
+        content: str,
+        encoding: str | None,
+        create_parents: bool,
+    ) -> None:
+        target = self._resolve(path)
+        if target.exists() and not target.is_file():
+            raise IsADirectoryError(target)
+
+        data = content.encode(encoding or self._encoding)
+        self._check_size(len(data))
+        if create_parents:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        elif not target.parent.is_dir():
+            raise FileNotFoundError(target.parent)
+
+        self._assert_inside(target.parent.resolve())
+        _atomic_write(target, data)
+
+    async def edit_file(
+        self,
+        path: str | os.PathLike[str],
+        old: str,
+        new: str,
+        *,
+        replace_all: bool = False,
+        encoding: str | None = None,
+    ) -> int:
+        return await asyncio.to_thread(
+            self._edit_file,
+            path,
+            old,
+            new,
+            replace_all,
+            encoding,
+        )
+
+    def _edit_file(
+        self,
+        path: str | os.PathLike[str],
+        old: str,
+        new: str,
+        replace_all: bool,
+        encoding: str | None,
+    ) -> int:
+        if not old:
+            raise EditError("old text must not be empty")
+
+        selected_encoding = encoding or self._encoding
+        content = self._read_file(path, selected_encoding)
+        occurrences = content.count(old)
+        if occurrences == 0:
+            raise EditError("old text was not found")
+        if occurrences > 1 and not replace_all:
+            raise EditError(
+                f"old text occurs {occurrences} times; use replace_all=True"
+            )
+
+        count = occurrences if replace_all else 1
+        updated = content.replace(old, new, -1 if replace_all else 1)
+        self._write_file(path, updated, selected_encoding, True)
+        return count
+
+    async def glob(self, pattern: str) -> Sequence[Entry]:
+        return await asyncio.to_thread(self._glob, pattern)
+
+    def _glob(self, pattern: str) -> list[Entry]:
+        _validate_pattern(pattern)
+        matches: list[Entry] = []
+        for candidate in self._root.glob(pattern):
+            try:
+                matches.append(self._entry(candidate))
+            except OSError:
+                continue
+        return sorted(matches, key=lambda entry: entry.path)
+
+    async def list_dir(
+        self,
+        path: str | os.PathLike[str] = ".",
+        *,
+        recursive: bool = False,
+        limit: int | None = None,
+    ) -> Sequence[Entry]:
+        return await asyncio.to_thread(self._list_dir, path, recursive, limit)
+
+    def _list_dir(
+        self,
+        path: str | os.PathLike[str],
+        recursive: bool,
+        limit: int | None,
+    ) -> list[Entry]:
+        if limit is not None and limit < 0:
+            raise ValueError("limit must be non-negative or None")
+        directory = self._resolve(path)
+        if not directory.is_dir():
+            raise NotADirectoryError(directory)
+
+        discovered = directory.rglob("*") if recursive else directory.iterdir()
+        candidates = sorted(
+            discovered,
+            key=lambda candidate: candidate.relative_to(self._root).as_posix(),
+        )
+        entries: list[Entry] = []
+        for candidate in candidates:
+            if limit is not None and len(entries) >= limit:
+                break
+            try:
+                entries.append(self._entry(candidate))
+            except OSError:
+                continue
+        return sorted(entries, key=lambda entry: entry.path)
+
+    async def stat(
+        self,
+        path: str | os.PathLike[str],
+    ) -> Entry | None:
+        return await asyncio.to_thread(self._stat, path)
+
+    def _stat(self, path: str | os.PathLike[str]) -> Entry | None:
+        target = self._resolve_entry(path)
+        try:
+            return self._entry(target)
+        except FileNotFoundError:
+            return None
+
+    def _entry(self, path: Path) -> Entry:
+        metadata = path.lstat()
+        is_dir = path.is_dir()
+        return Entry(
+            path=path.relative_to(self._root).as_posix() or ".",
+            is_dir=is_dir,
+            is_symlink=path.is_symlink(),
+            size=None if is_dir else metadata.st_size,
+            modified=metadata.st_mtime,
+        )
+
+    def _resolve(self, path: str | os.PathLike[str]) -> Path:
+        requested = Path(path)
+        if requested.is_absolute():
+            target = requested.resolve(strict=False)
+        else:
+            target = (self._root / requested).resolve(strict=False)
+        self._assert_inside(target)
+        return target
+
+    def _resolve_entry(self, path: str | os.PathLike[str]) -> Path:
+        requested = Path(path)
+        target = requested if requested.is_absolute() else self._root / requested
+        target = Path(os.path.abspath(target))
+        self._assert_inside(target)
+        self._assert_inside(target.parent.resolve(strict=False))
+        return target
+
+    def _assert_inside(self, path: Path) -> None:
+        try:
+            path.relative_to(self._root)
+        except ValueError as error:
+            raise PathOutsideWorkspaceError(
+                f"path is outside workspace: {path}"
+            ) from error
+
+    def _check_size(self, size: int) -> None:
+        if self._max_file_bytes is not None and size > self._max_file_bytes:
+            raise FileTooLargeError(
+                f"file is {size} bytes; limit is {self._max_file_bytes} bytes"
+            )
+
+
+def _validate_pattern(pattern: str) -> None:
+    if not pattern:
+        raise ValueError("glob pattern must not be empty")
+    parsed = PurePath(pattern)
+    if parsed.is_absolute() or ".." in parsed.parts:
+        raise PathOutsideWorkspaceError(
+            f"glob pattern must stay inside workspace: {pattern}"
+        )
+
+
+def _atomic_write(target: Path, data: bytes) -> None:
+    existing_mode = stat.S_IMODE(target.stat().st_mode) if target.exists() else None
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=target.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if existing_mode is not None:
+            temporary.chmod(existing_mode)
+        os.replace(temporary, target)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
