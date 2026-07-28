@@ -42,6 +42,7 @@ class Tools:
         params: type[BaseModel] | None = None,
         status: StatusFormatter | None = None,
         kind: str = "generic",
+        requires_approval: bool = False,
         available_when: ToolAvailability | None = None,
         tags: Sequence[str] = (),
         metadata: Mapping[str, Any] | None = None,
@@ -60,6 +61,7 @@ class Tools:
                         tags=frozenset(tags),
                         extra=metadata or {},
                     ),
+                    requires_approval=requires_approval,
                     available_when=available_when,
                 )
             )

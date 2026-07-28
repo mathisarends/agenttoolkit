@@ -247,6 +247,19 @@ def test_status_requires_param_model_and_tool_name() -> None:
         Tool("", "Missing name", lambda: None)
 
 
+def test_tools_can_declare_approval_requirement() -> None:
+    tool = Tool("safe", "Safe action", lambda: None)
+    tools = Tools()
+
+    assert tool.requires_approval is False
+
+    @tools.action("Sensitive action", requires_approval=True)
+    def sensitive() -> None:
+        pass
+
+    assert tools.get("sensitive").requires_approval is True
+
+
 def test_metadata_is_defensively_copied_and_immutable() -> None:
     tags = {"read"}
     extra: dict[str, Any] = {"owner": "platform"}

@@ -46,6 +46,7 @@ class Tool:
         *,
         param_model: type[BaseModel] | None = None,
         metadata: ToolMetadata | None = None,
+        requires_approval: bool = False,
         available_when: ToolAvailability | None = None,
     ) -> None:
         if not name:
@@ -55,6 +56,7 @@ class Tool:
         self.fn = fn
         self.param_model = param_model
         self.metadata = metadata or ToolMetadata()
+        self.requires_approval = requires_approval
         self.available_when = available_when
         self.input_model = _schema_model(fn, param_model=param_model)
         self.parameters = self.input_model.model_json_schema(mode="validation")

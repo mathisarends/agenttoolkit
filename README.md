@@ -68,6 +68,9 @@ Execute a model-produced call:
 result = await tools.execute("search", {"query": "tool middleware"})
 ```
 
+Set `requires_approval=True` on an action to mark its `Tool` as requiring
+application-level approval before execution. The flag defaults to `False`.
+
 Tool results are returned unchanged. Validation and execution exceptions propagate
 to the caller, so applications can choose their own result and error conventions.
 Custom middleware can add an application-specific result envelope when needed.
