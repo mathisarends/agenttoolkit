@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from agenttoolkit import Tools, ToolContext, provided, requires
+from agenttoolkit import ToolContext, Tools, provided, requires
 
 
 @dataclass
