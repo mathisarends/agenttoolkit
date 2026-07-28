@@ -17,7 +17,6 @@ from agenttoolkit.tools.middleware import (
 from agenttoolkit.tools.results import ActionResult
 from agenttoolkit.tools.schema import ToolSchema
 from agenttoolkit.tools.tool import (
-    ActionKind,
     StatusFormatter,
     Tool,
     ToolMetadata,
@@ -42,10 +41,8 @@ class Tools:
         name: str | None = None,
         *,
         params: type[BaseModel] | None = None,
-        result_instruction: str | None = None,
-        respond: bool = True,
         status: StatusFormatter | None = None,
-        kind: ActionKind | str = ActionKind.GENERIC,
+        kind: str = "generic",
         available_when: ToolAvailability | None = None,
         tags: Sequence[str] = (),
         metadata: Mapping[str, Any] | None = None,
@@ -60,8 +57,6 @@ class Tools:
                     param_model=params,
                     metadata=ToolMetadata(
                         kind=kind,
-                        respond=respond,
-                        result_instruction=result_instruction,
                         status=status,
                         tags=frozenset(tags),
                         extra=metadata or {},

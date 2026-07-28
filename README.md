@@ -18,7 +18,6 @@ It intentionally contains no application-specific tools or agent loop.
 from pydantic import BaseModel, Field
 
 from agenttoolkit import (
-    ActionKind,
     ActionResult,
     Inject,
     ToolContext,
@@ -43,7 +42,7 @@ tools = Tools(context=ToolContext(SearchClient()))
 @tools.action(
     "Search the connected knowledge base.",
     params=SearchParams,
-    kind=ActionKind.READ,
+    kind="read",
     status="Searching for {query}...",
     tags=["search"],
     metadata={"requires_network": True},

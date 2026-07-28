@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit import (
-    ActionKind,
     Skills,
     ToolContext,
     Tools,
@@ -136,7 +135,7 @@ async def test_explicit_tool_bridge_uses_injected_skills(tmp_path: Path) -> None
 
     assert schemas == {"load_skill", "read_skill_resource", "run_skill_script"}
     assert resource.value == "Read me."
-    assert registry.get("run_skill_script").kind is ActionKind.DESTRUCTIVE
+    assert registry.get("run_skill_script").kind == "destructive"
 
 
 def test_script_tool_can_be_disabled(tmp_path: Path) -> None:

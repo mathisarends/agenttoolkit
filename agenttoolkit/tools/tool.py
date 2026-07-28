@@ -14,14 +14,6 @@ from agenttoolkit.tools.context import ToolContext
 from agenttoolkit.tools.schema import ToolSchema, _schema_model
 
 
-class ActionKind(StrEnum):
-    GENERIC = "generic"
-    READ = "read"
-    MUTATE = "mutate"
-    DESTRUCTIVE = "destructive"
-    END_SESSION = "end_session"
-
-
 class ToolSchemaFormat(StrEnum):
     NATIVE = "native"
     OPENAI = "openai"
@@ -35,9 +27,7 @@ type StatusFormatter = str | Callable[[BaseModel], str]
 class ToolMetadata:
     """Runtime hints which do not belong in an LLM function schema."""
 
-    kind: ActionKind | str = ActionKind.GENERIC
-    respond: bool = True
-    result_instruction: str | None = None
+    kind: str = "generic"
     status: StatusFormatter | None = None
     tags: frozenset[str] = field(default_factory=frozenset)
     extra: Mapping[str, Any] = field(default_factory=dict)
@@ -71,16 +61,8 @@ class Tool:
         self._validate_status()
 
     @property
-    def kind(self) -> ActionKind | str:
+    def kind(self) -> str:
         return self.metadata.kind
-
-    @property
-    def respond(self) -> bool:
-        return self.metadata.respond
-
-    @property
-    def result_instruction(self) -> str | None:
-        return self.metadata.result_instruction
 
     @property
     def status(self) -> StatusFormatter | None:

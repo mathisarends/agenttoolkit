@@ -6,7 +6,6 @@ import pytest
 from pydantic import BaseModel, Field
 
 from agenttoolkit import (
-    ActionKind,
     ActionResult,
     Inject,
     ToolContext,
@@ -36,7 +35,7 @@ async def test_register_validate_inject_and_execute() -> None:
     @tools.action(
         "Search",
         params=SearchParams,
-        kind=ActionKind.READ,
+        kind="read",
         tags=["network"],
         metadata={"owner": "knowledge"},
     )
@@ -51,7 +50,7 @@ async def test_register_validate_inject_and_execute() -> None:
 
     assert result == ActionResult.success("found:docs:10")
     assert tool is not None
-    assert tool.kind is ActionKind.READ
+    assert tool.kind == "read"
     assert tool.metadata.tags == frozenset({"network"})
     assert tool.metadata.extra["owner"] == "knowledge"
 

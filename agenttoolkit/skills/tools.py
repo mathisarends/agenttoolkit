@@ -2,7 +2,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agenttoolkit.skills.collection import Skills
 from agenttoolkit.tools import (
-    ActionKind,
     ActionResult,
     Inject,
     Tools,
@@ -47,7 +46,7 @@ def register_skill_tools(
         "Call this before using a skill.",
         name="load_skill",
         params=LoadSkillParams,
-        kind=ActionKind.READ,
+        kind="read",
         available_when=available,
         tags=["skills"],
     )
@@ -61,7 +60,7 @@ def register_skill_tools(
         "Read one file bundled with a skill, as listed by load_skill.",
         name="read_skill_resource",
         params=ReadSkillResourceParams,
-        kind=ActionKind.READ,
+        kind="read",
         available_when=available,
         tags=["skills"],
     )
@@ -78,7 +77,7 @@ def register_skill_tools(
             "skill directory and no shell is involved.",
             name="run_skill_script",
             params=RunSkillScriptParams,
-            kind=ActionKind.DESTRUCTIVE,
+            kind="destructive",
             available_when=available,
             tags=["skills", "code-execution"],
         )

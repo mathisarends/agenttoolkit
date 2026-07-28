@@ -9,11 +9,10 @@ from .context import Inject, ToolContext
 from .middleware import ToolCall, ToolExecutionError, ToolMiddleware
 from .results import ActionResult
 from .schema import ToolSchema, build_schema
-from .tool import ActionKind, Tool, ToolMetadata, ToolSchemaFormat
+from .tool import Tool, ToolMetadata, ToolSchemaFormat
 from .tools import Tools
 
 __all__ = [
-    "ActionKind",
     "ActionResult",
     "Inject",
     "Tool",
