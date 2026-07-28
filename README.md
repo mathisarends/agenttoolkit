@@ -18,6 +18,7 @@ It intentionally contains no application-specific tools or agent loop.
 from pydantic import BaseModel, Field
 
 from agenttoolkit import (
+    ActionResult,
     Inject,
     ToolContext,
     Tools,
@@ -66,14 +67,38 @@ Execute a model-produced call:
 
 ```python
 result = await tools.execute("search", {"query": "tool middleware"})
+if result.ok:
+    matches = result.result
 ```
 
 Set `requires_approval=True` on an action to mark its `Tool` as requiring
 application-level approval before execution. The flag defaults to `False`.
 
-Tool results are returned unchanged. Validation and execution exceptions propagate
-to the caller, so applications can choose their own result and error conventions.
-Custom middleware can add an application-specific result envelope when needed.
+`ActionResult` is generic, so applications can construct and annotate concrete
+result types without falling back to `Any`:
+
+```python
+typed_result = ActionResult[list[str]].success(["first", "second"])
+```
+
+Project-specific result fields belong in a typed subclass:
+
+```python
+class ProjectActionResult[ResultT](ActionResult[ResultT]):
+    trace_id: str | None = None
+    citations: tuple[str, ...] = ()
+
+
+tools = Tools(result_type=ProjectActionResult[object])
+```
+
+Raw tool return values are wrapped as successful results. Resolution and validation
+failures become failed results, while the error boundary logs unexpected exceptions
+with their traceback and returns a generic internal error. The base result rejects
+unknown fields so project-specific data remains explicitly typed. Because tool
+dispatch by name is dynamic and a registry can contain heterogeneous return types,
+`Tools.execute()` returns `ActionResult[object]`; callers can narrow its `result` or
+return a specialized `ActionResult` directly from a tool.
 
 Plain function parameters work without a Pydantic model:
 
@@ -83,9 +108,11 @@ def add(a: int, b: int) -> int:
     return a + b
 ```
 
-Use `provided(...)`, `requires(...)`, and `described(...)` when schema exposure
-or descriptions depend on the active `ToolContext`. Custom middleware subclasses
-`ToolMiddleware` and can inspect or wrap each `ToolCall`.
+Use `provided(...)` and `requires(...)` when schema exposure depends on the active
+`ToolContext`. Use
+`description_from_context(..., render=..., fallback=...)` for context-dependent
+tool descriptions. Custom middleware subclasses `ToolMiddleware` and can inspect
+or wrap each `ToolCall`.
 
 ## Skills
 

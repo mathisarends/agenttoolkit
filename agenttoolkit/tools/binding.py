@@ -11,15 +11,15 @@ class ToolDescription:
         self,
         dependency: type,
         render: Callable[[Any], str],
-        default: str,
+        fallback: str,
     ) -> None:
         self._dependency = dependency
         self._render = render
-        self._default = default
+        self._fallback = fallback
 
     def resolve(self, context: ToolContext | None) -> str:
         dependency = context.resolve(self._dependency) if context is not None else None
-        return self._default if dependency is None else self._render(dependency)
+        return self._fallback if dependency is None else self._render(dependency)
 
 
 class ToolAvailability:
@@ -39,13 +39,13 @@ class ToolAvailability:
         return ToolAvailability(lambda context: not self(context))
 
 
-def described[T](
+def description_from_context[T](
     dependency: type[T],
     *,
     render: Callable[[T], str],
-    default: str,
+    fallback: str,
 ) -> ToolDescription:
-    return ToolDescription(dependency, render, default)
+    return ToolDescription(dependency, render, fallback)
 
 
 def provided(dependency: type) -> ToolAvailability:

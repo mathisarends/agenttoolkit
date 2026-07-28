@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, overload
 
@@ -14,6 +12,7 @@ from agenttoolkit.tools.middleware import (
     compose,
     default_chain,
 )
+from agenttoolkit.tools.results import ActionResult
 from agenttoolkit.tools.schema import ToolSchema
 from agenttoolkit.tools.tool import (
     StatusFormatter,
@@ -29,10 +28,15 @@ class Tools:
         *,
         context: ToolContext | None = None,
         middleware: Sequence[ToolMiddleware] | None = None,
+        result_type: type[ActionResult[object]] = ActionResult[object],
     ) -> None:
         self._tools: dict[str, Tool] = {}
         self._context = context
-        self._handler = compose(default_chain(self._tools, middleware), self._invoke)
+        self._result_type = result_type
+        self._handler = compose(
+            default_chain(self._tools, result_type, middleware),
+            self._invoke,
+        )
 
     def action(
         self,
@@ -131,7 +135,7 @@ class Tools:
         arguments: Mapping[str, Any] | None = None,
         *,
         context: ToolContext | None = None,
-    ) -> Any:
+    ) -> ActionResult[object]:
         return await self._handler(
             ToolCall(
                 name=name,
@@ -150,8 +154,13 @@ class Tools:
     def __len__(self) -> int:
         return len(self._tools)
 
-    async def _invoke(self, call: ToolCall) -> Any:
+    async def _invoke(self, call: ToolCall) -> ActionResult[object]:
         if call.tool is None or call.params is None:
             raise RuntimeError("Tool pipeline did not resolve and validate the call")
         arguments = resolve_arguments(call.tool, call.params, call.context)
-        return await call.tool.execute(arguments)
+        result = await call.tool.execute(arguments)
+        return (
+            result
+            if isinstance(result, ActionResult)
+            else self._result_type.success(result)
+        )

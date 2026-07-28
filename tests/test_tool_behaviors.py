@@ -4,9 +4,10 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from agenttoolkit import (
+    ActionResult,
     Inject,
     Tool,
     ToolCall,
@@ -71,26 +72,24 @@ async def test_optional_injected_dependency_uses_function_default() -> None:
     def identify(service: Inject[Service] = None) -> str:
         return "default" if service is None else service.name
 
-    assert await tools.execute("identify") == "default"
-    assert (
-        await tools.execute(
-            "identify",
-            context=ToolContext(Service("injected")),
-        )
-        == "injected"
-    )
+    assert await tools.execute("identify") == ActionResult.success("default")
+    assert await tools.execute(
+        "identify",
+        context=ToolContext(Service("injected")),
+    ) == ActionResult.success("injected")
 
 
 @pytest.mark.asyncio
-async def test_missing_required_injection_propagates() -> None:
+async def test_missing_required_injection_is_returned_as_failure() -> None:
     tools = Tools()
 
     @tools.action("Use a required service")
     def identify(service: Inject[Service]) -> str:
         return service.name
 
-    with pytest.raises(ValueError, match="Missing injected dependency"):
-        await tools.execute("identify")
+    result = await tools.execute("identify")
+
+    assert result == ActionResult.fail("Internal tool error.")
 
 
 @pytest.mark.asyncio
@@ -105,16 +104,11 @@ async def test_unavailable_and_unknown_tools_report_available_names() -> None:
     def private() -> None:
         pass
 
-    with pytest.raises(
-        LookupError,
-        match=r"Unknown tool 'private'\. Available: \['public'\]",
-    ):
-        await tools.execute("private")
-    with pytest.raises(
-        LookupError,
-        match=r"Unknown tool 'missing'\. Available: \['public'\]",
-    ):
-        await tools.execute("missing")
+    unavailable = await tools.execute("private")
+    unknown = await tools.execute("missing")
+
+    assert unavailable.error == "Unknown tool 'private'. Available: ['public']"
+    assert unknown.error == "Unknown tool 'missing'. Available: ['public']"
 
 
 class RecordingMiddleware(ToolMiddleware):
@@ -124,24 +118,20 @@ class RecordingMiddleware(ToolMiddleware):
     async def __call__(
         self,
         call: ToolCall,
-        next_handler: Callable[[ToolCall], Awaitable[Any]],
-    ) -> Any:
+        next: Callable[
+            [ToolCall],
+            Awaitable[ActionResult[object]],
+        ],
+    ) -> ActionResult[object]:
         self.events.append(f"before:{getattr(call.params, 'value', None)}")
-        result = await next_handler(call)
-        self.events.append(f"after:{result}")
+        result = await next(call)
+        self.events.append(f"after:{result.result}")
         return result
 
 
-class ResultEnvelopeMiddleware(ToolMiddleware):
-    async def __call__(
-        self,
-        call: ToolCall,
-        next_handler: Callable[[ToolCall], Awaitable[Any]],
-    ) -> dict[str, Any]:
-        try:
-            return {"data": await next_handler(call)}
-        except Exception as error:
-            return {"error": str(error)}
+class ProjectActionResult[ResultT](ActionResult[ResultT]):
+    trace_id: str | None = None
+    citations: tuple[str, ...] = ()
 
 
 @pytest.mark.asyncio
@@ -155,23 +145,50 @@ async def test_custom_middleware_wraps_execution() -> None:
 
     result = await tools.execute("double", {"value": "3"})
 
-    assert result == 6
+    assert result == ActionResult.success(6)
     assert events[0] == "before:None"
     assert events[1] == "after:6"
 
 
 @pytest.mark.asyncio
-async def test_application_middleware_can_define_its_own_result_envelope() -> None:
-    tools = Tools(middleware=[ResultEnvelopeMiddleware()])
+async def test_project_can_extend_and_specialize_action_result() -> None:
+    tools = Tools(result_type=ProjectActionResult[object])
 
     @tools.action("Double a number")
     def double(value: int) -> int:
         return value * 2
 
-    assert await tools.execute("double", {"value": 3}) == {"data": 6}
+    @tools.action("Fail")
+    def fail() -> None:
+        raise RuntimeError("secret")
+
+    result = await tools.execute("double", {"value": 3})
     invalid = await tools.execute("double", {})
-    assert "error" in invalid
-    assert "value" in invalid["error"]
+    failed = await tools.execute("fail")
+
+    assert result == ProjectActionResult[object].success(6)
+    assert isinstance(result, ProjectActionResult)
+    assert result.trace_id is None
+    assert isinstance(invalid, ProjectActionResult)
+    assert not invalid.ok
+    assert "value" in (invalid.error or "")
+    assert isinstance(failed, ProjectActionResult)
+    assert failed == ProjectActionResult[object].fail("Internal tool error.")
+
+    typed = ProjectActionResult[int].success(
+        6,
+        trace_id="trace-123",
+        citations=("doc-1",),
+    )
+    assert typed.result == 6
+    assert typed.trace_id == "trace-123"
+    assert typed.model_dump()["citations"] == ("doc-1",)
+
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        ActionResult[int].success(6, trace_id="not-a-core-field")
+
+    with pytest.raises(ValidationError, match="int_parsing"):
+        ActionResult[int].model_validate({"ok": True, "result": "not-an-integer"})
 
 
 def test_registry_merge_iteration_and_replacement_are_explicit() -> None:
@@ -292,5 +309,6 @@ async def test_param_model_binding_must_be_unambiguous() -> None:
     def ambiguous(first: object, second: object) -> None:
         pass
 
-    with pytest.raises(ValueError, match="no unambiguous parameter"):
-        await tools.execute("ambiguous", {"item": "document"})
+    result = await tools.execute("ambiguous", {"item": "document"})
+
+    assert result == ActionResult.fail("Internal tool error.")

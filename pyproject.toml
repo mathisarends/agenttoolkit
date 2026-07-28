@@ -17,8 +17,11 @@ dev = [
     "ruff>=0.9",
 ]
 py-llmify = [
-    "py-llmify",
+    "py-llmify[openai]",
 ]
+
+[tool.uv]
+default-groups = ["dev", "py-llmify"]
 
 [build-system]
 requires = ["hatchling"]

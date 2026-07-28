@@ -4,14 +4,15 @@ import logging
 from typing import Annotated
 
 import pytest
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from agenttoolkit import (
+    ActionResult,
     Inject,
     ToolContext,
     Tools,
     ToolSchemaFormat,
-    described,
+    description_from_context,
     provided,
 )
 
@@ -47,7 +48,7 @@ async def test_register_validate_inject_and_execute() -> None:
     result = await tools.execute("search", {"query": "docs"})
     tool = tools.get("search")
 
-    assert result == "found:docs:10"
+    assert result == ActionResult.success("found:docs:10")
     assert tool is not None
     assert tool.kind == "read"
     assert tool.metadata.tags == frozenset({"network"})
@@ -62,10 +63,11 @@ async def test_plain_signature_is_validated_and_sync_result_is_returned() -> Non
     def add(a: int, b: int = 1) -> int:
         return a + b
 
-    assert await tools.execute("add", {"a": "2"}) == 3
+    assert await tools.execute("add", {"a": "2"}) == ActionResult.success(3)
 
-    with pytest.raises(ValidationError, match="a"):
-        await tools.execute("add", {})
+    invalid = await tools.execute("add", {})
+    assert not invalid.ok
+    assert "a" in (invalid.error or "")
 
 
 def test_schema_is_provider_neutral_with_adapters() -> None:
@@ -105,16 +107,19 @@ def test_context_controls_availability_and_description() -> None:
     tools = Tools()
 
     @tools.action(
-        described(
+        description_from_context(
             SearchClient,
             render=lambda client: f"Search with prefix {client.prefix}",
-            default="Search",
+            fallback="Search",
         ),
         available_when=provided(SearchClient),
     )
     def search(query: str) -> None:
         pass
 
+    tool = tools.get("search")
+    assert tool is not None
+    assert tool.resolve_description() == "Search"
     assert tools.get_schema() == []
 
     tools.set_context(ToolContext(SearchClient("kb:")))
@@ -123,7 +128,7 @@ def test_context_controls_availability_and_description() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_errors_are_logged_and_propagate_to_the_application(
+async def test_tool_errors_are_logged_and_returned_by_the_boundary(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     tools = Tools()
@@ -133,10 +138,10 @@ async def test_tool_errors_are_logged_and_propagate_to_the_application(
         raise RuntimeError("secret")
 
     with caplog.at_level(logging.ERROR, logger="agenttoolkit.tools.middleware"):
-        with pytest.raises(RuntimeError, match="secret"):
-            await tools.execute("internal_failure")
+        result = await tools.execute("internal_failure")
 
     assert "Tool 'internal_failure' failed" in caplog.text
+    assert result == ActionResult.fail("Internal tool error.")
 
 
 def test_duplicate_registration_and_status_validation() -> None:

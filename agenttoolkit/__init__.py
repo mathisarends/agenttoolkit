@@ -1,5 +1,6 @@
 from .skills import Skill, Skills, parse_skill
 from .tools import (
+    ActionResult,
     Inject,
     Tool,
     ToolAvailability,
@@ -12,12 +13,13 @@ from .tools import (
     ToolSchema,
     ToolSchemaFormat,
     build_schema,
-    described,
+    description_from_context,
     provided,
     requires,
 )
 
 __all__ = [
+    "ActionResult",
     "Inject",
     "Skill",
     "Skills",
@@ -32,7 +34,7 @@ __all__ = [
     "ToolSchemaFormat",
     "Tools",
     "build_schema",
-    "described",
+    "description_from_context",
     "parse_skill",
     "provided",
     "requires",
