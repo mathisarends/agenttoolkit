@@ -53,7 +53,7 @@ it is a building block, not a framework.
 uv add agenttoolkit
 ```
 
-Requires Python 3.12–3.14. Modules that use forward references should add
+Requires Python 3.13–3.14. Modules that use forward references should add
 `from __future__ import annotations`, since lazy annotation evaluation
 (PEP 649) is native only to 3.14+.
 
@@ -258,7 +258,7 @@ status while a call is in flight:
 ```python
 tool = tools.get(name)
 if tool is not None and tool.requires_approval and not confirm(name, arguments):
-    result = ActionResult.fail("Declined by user")
+    result = ActionResult[object].fail("Declined by user")
 else:
     print(tool.format_status(arguments) if tool else name)
     result = await tools.execute(name, arguments, context=context)
@@ -272,15 +272,28 @@ currently exposed (`tool.name`, `tool.resolve_description(context)`,
 ## Results (`ActionResult`)
 
 ```python
-class ActionResult[ResultT](BaseModel):
+class ActionResult[ResultT = str](BaseModel):
     ok: bool
     result: ResultT | None = None
     error: str | None = None
 ```
 
+`ResultT` defaults to `str`, the common case for a tool that hands text
+back to the model. A bare `ActionResult` therefore *is* `ActionResult[str]`
+and validates as one — `ActionResult.success(3)` raises. Payloads of any
+other type must parametrize explicitly.
+
 Raw tool return values are wrapped as successful results automatically. A
 tool may instead return an `ActionResult` directly — e.g. to fail without
 raising, or to populate a typed result:
+
+```python
+def run_command(command: str) -> ActionResult:  # ActionResult[str]
+    result = shell(command)
+    if not result.ok:
+        return ActionResult.fail(result.output)
+    return ActionResult.success(result.output)
+```
 
 ```python
 WeatherActionResult = ActionResult[WeatherResult]
@@ -305,7 +318,7 @@ middleware chain produces (validation failures, unknown-tool errors, the
 internal-error fallback) is then built through that subclass too:
 
 ```python
-class ProjectActionResult[ResultT](ActionResult[ResultT]):
+class ProjectActionResult[ResultT = str](ActionResult[ResultT]):
     trace_id: str | None = None
     citations: tuple[str, ...] = ()
 
@@ -355,7 +368,10 @@ inject them through `ToolContext`, or expose only the operations appropriate
 for a particular agent.
 
 ```python
+from pathlib import Path
+
 from agenttoolkit.builtins import (
+    BindMount,
     DockerSandbox,
     LocalWorkspace,
     SandboxPolicy,
@@ -367,13 +383,26 @@ await workspace.write_file("src/example.py", "print('hello')\n")
 entries = await workspace.list_dir("src")
 source = await workspace.read_file(entries[0].path)
 
+output = workspace.root / "output"
+output.mkdir(exist_ok=True)
+cli_config = Path.home() / ".config" / "my-cli"
+
 policy = SandboxPolicy.for_workspace(
     workspace.root,
     writable=True,
-    enable_network_access=False,
+    enable_network_access=True,
 )
-sandbox = DockerSandbox("python:3.14-slim", policy)
-result = await sandbox.execute("python src/example.py")
+sandbox = DockerSandbox(
+    "my-cli:latest",
+    policy,
+    inherit_environment=("MY_CLI_TOKEN",),
+    mounts=(
+        BindMount.read_only(cli_config, "/home/agent/.config/my-cli"),
+        BindMount.read_write(output, "/output"),
+    ),
+    user="host",
+)
+result = await sandbox.execute("my-cli build --output /output")
 ```
 
 The `Workspace` port provides `read_file`, `write_file`, `edit_file`, `glob`,
@@ -389,6 +418,15 @@ environment values, timeout, captured output, memory, process, and CPU limits.
 supports filesystem/network isolation and host-side timeout/output limits.
 `UnsafeLocalSandbox` is useful for trusted commands but deliberately does not
 claim to enforce path or network isolation.
+
+`DockerSandbox` also supports named bind mounts and an explicit allowlist of
+host environment variables. `BindMount.read_write(...)` writes directly back
+to the host. `inherit_environment` fails fast when a requested variable is
+missing and forwards its name without embedding the secret value in the
+generated Docker arguments. On POSIX hosts, `user="host"` maps the container
+process to the host UID and GID so generated files remain owned by the
+developer. Use `environment={...}` on `SandboxPolicy` or `env={...}` on
+`execute(...)` for explicit values and per-call overrides.
 
 ## Skills
 
@@ -453,8 +491,7 @@ uv run --locked pytest
 
 The test command measures branch coverage for `agenttoolkit` and fails
 below 90%. Dependabot groups Python dependency updates into one weekly pull
-request; the same CI matrix validates every update on Python 3.12, 3.13,
-and 3.14.
+request; the same CI matrix validates every update on Python 3.13 and 3.14.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution workflow
 and conventions.

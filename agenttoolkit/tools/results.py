@@ -3,8 +3,14 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict
 
 
-class ActionResult[ResultT](BaseModel):
+class ActionResult[ResultT = str](BaseModel):
     """Generic tool result intended for application-level specialization.
+
+    ``ResultT`` defaults to ``str``, so a bare ``ActionResult`` is
+    ``ActionResult[str]`` — and validates as one. Anything returning a
+    non-string payload must parametrize explicitly, including the
+    ``ActionResult[object]`` used wherever the payload type is not known
+    statically.
 
     Bind a parametrized model to a local name when only its payload type changes::
 

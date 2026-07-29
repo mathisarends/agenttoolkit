@@ -50,14 +50,14 @@ def _build_tools(sandbox: Sandbox, *, unsafe: bool) -> Tools:
         status=lambda params: f"Running: {params.command}",
         requires_approval=unsafe,
     )
-    async def batch(params: BatchParams, sandbox: Inject[Sandbox]) -> ActionResult[str]:
+    async def batch(params: BatchParams, sandbox: Inject[Sandbox]) -> ActionResult:
         result = await sandbox.execute(params.command)
         if not result.ok:
-            return ActionResult[str].fail(
+            return ActionResult.fail(
                 f"exit={result.returncode} timed_out={result.timed_out}\n"
                 f"{result.output}"
             )
-        return ActionResult[str].success(result.output)
+        return ActionResult.success(result.output)
 
     return tools
 
@@ -66,7 +66,7 @@ def _on_tool_call(name: str, arguments: dict) -> None:
     print(f"  -> {name}({arguments})")
 
 
-def _on_tool_result(name: str, result: ActionResult) -> None:
+def _on_tool_result(name: str, result: ActionResult[object]) -> None:
     if result.ok:
         print(f"  <- {name}:\n{result.result}")
     else:

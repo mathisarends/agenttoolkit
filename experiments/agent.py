@@ -22,7 +22,7 @@ def _json_default(value: Any) -> Any:
 
 
 OnToolCall = Callable[[str, dict[str, Any]], None]
-OnToolResult = Callable[[str, ActionResult], None]
+OnToolResult = Callable[[str, ActionResult[object]], None]
 
 
 class Agent:
@@ -74,7 +74,7 @@ class Agent:
                     and self._confirm is not None
                     and not self._confirm(call.function.name, arguments)
                 ):
-                    result = ActionResult.fail("Declined by user")
+                    result = ActionResult[object].fail("Declined by user")
                 else:
                     result = await self._tools.execute(call.function.name, arguments)
 

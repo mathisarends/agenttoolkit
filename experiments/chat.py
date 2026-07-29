@@ -136,7 +136,7 @@ def _on_tool_call(name: str, arguments: dict) -> None:
     print(f"  -> tool call: {name}({arguments}){label}")
 
 
-def _on_tool_result(name: str, result: ActionResult) -> None:
+def _on_tool_result(name: str, result: ActionResult[object]) -> None:
     if result.ok:
         print(f"  <- tool result [{name}]: {result.result}")
     else:

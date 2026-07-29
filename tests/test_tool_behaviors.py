@@ -129,7 +129,7 @@ class RecordingMiddleware(ToolMiddleware):
         return result
 
 
-class ProjectActionResult[ResultT](ActionResult[ResultT]):
+class ProjectActionResult[ResultT = str](ActionResult[ResultT]):
     trace_id: str | None = None
     citations: tuple[str, ...] = ()
 
@@ -145,7 +145,7 @@ async def test_custom_middleware_wraps_execution() -> None:
 
     result = await tools.execute("double", {"value": "3"})
 
-    assert result == ActionResult.success(6)
+    assert result == ActionResult[int].success(6)
     assert events[0] == "before:None"
     assert events[1] == "after:6"
 
@@ -189,6 +189,15 @@ async def test_project_can_extend_and_specialize_action_result() -> None:
 
     with pytest.raises(ValidationError, match="int_parsing"):
         ActionResult[int].model_validate({"ok": True, "result": "not-an-integer"})
+
+
+def test_unparametrized_action_result_defaults_to_str() -> None:
+    assert ActionResult.success("text").result == "text"
+    assert ActionResult.fail("boom").error == "boom"
+    assert ProjectActionResult.success("text").result == "text"
+
+    with pytest.raises(ValidationError, match="string_type"):
+        ActionResult.success(3)
 
 
 def test_registry_merge_iteration_and_replacement_are_explicit() -> None:

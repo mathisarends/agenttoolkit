@@ -63,7 +63,7 @@ async def test_plain_signature_is_validated_and_sync_result_is_returned() -> Non
     def add(a: int, b: int = 1) -> int:
         return a + b
 
-    assert await tools.execute("add", {"a": "2"}) == ActionResult.success(3)
+    assert await tools.execute("add", {"a": "2"}) == ActionResult[int].success(3)
 
     invalid = await tools.execute("add", {})
     assert not invalid.ok

@@ -6,7 +6,9 @@ from pydantic import Field
 from agenttoolkit import ActionResult, Tools
 
 
-class TracedActionResult[ResultT](ActionResult[ResultT]):
+# `= str` is repeated because PEP 696 defaults are declared per type
+# parameter — a subclass does not inherit `ActionResult`'s default.
+class TracedActionResult[ResultT = str](ActionResult[ResultT]):
     # Defaulted so middleware-generated failures (unknown tool, bad params,
     # ...) can build this envelope without knowing about tracing at all.
     trace_id: str = Field(default_factory=lambda: str(uuid.uuid4()))

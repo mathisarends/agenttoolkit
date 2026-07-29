@@ -18,16 +18,16 @@ uv run --locked pytest
 
 `pytest` measures branch coverage for `agenttoolkit` and fails the run
 below 90%; add tests alongside any new branch rather than special-casing
-the coverage gate. CI runs the same two commands on Python 3.12, 3.13, and
-3.14 — a change that only works on one of those versions isn't done.
+the coverage gate. CI runs the same two commands on Python 3.13 and 3.14 —
+a change that only works on one of those versions isn't done.
 
 ## Conventions
 
-- Python 3.12/3.13 evaluate annotations eagerly, so any module using a
+- Python 3.13 evaluates annotations eagerly, so any module using a
   forward reference (a class referencing its own name, or a name defined
   later in the file) needs `from __future__ import annotations` at the
-  top. This isn't needed on 3.14 (PEP 649), but the project supports all
-  three, so add it whenever it would matter on the older ones.
+  top. This isn't needed on 3.14 (PEP 649), but the project supports both,
+  so add it whenever it would matter on 3.13.
 - Use absolute imports (`from agenttoolkit.tools.context import
   ToolContext`), not relative imports — except in `__init__.py` files,
   which use relative imports to re-export their package's public API.

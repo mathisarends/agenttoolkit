@@ -1,10 +1,10 @@
 # Conventions
 
-- The project supports Python 3.12-3.14. Always add
+- The project supports Python 3.13-3.14. Always add
   `from __future__ import annotations` to modules that use forward
   references (e.g. a class referencing its own name, or names defined later
   in the file), since lazy annotation evaluation (PEP 649) is only native to
-  3.14+ and 3.12/3.13 will raise `NameError` at import time otherwise.
+  3.14+ and 3.13 will raise `NameError` at import time otherwise.
 - Use absolute imports (`from agenttoolkit.tools.context import ToolContext`),
   not relative imports (`from .context import ToolContext`). The one
   exception is `__init__.py` files, which use relative imports to re-export
