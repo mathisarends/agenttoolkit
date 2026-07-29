@@ -4,12 +4,14 @@ import argparse
 import asyncio
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from llmify import ChatCodex
 from pydantic import BaseModel, Field
 
 from agenttoolkit.builtins.shell import (
+    BindMount,
     DockerSandbox,
     Sandbox,
     SandboxPolicy,
@@ -22,10 +24,18 @@ DOCKER_IMAGE = "python:3.14-slim"
 WORKSPACE = Path(__file__).parent / "sandbox_workspace"
 
 
-def _build_sandbox(*, unsafe: bool) -> Sandbox:
+def _build_sandbox(
+    *,
+    unsafe: bool,
+    enable_network_access: bool = False,
+    inherit_environment: Sequence[str] = (),
+    mounts: Sequence[BindMount] = (),
+) -> Sandbox:
     WORKSPACE.mkdir(exist_ok=True)
     policy = SandboxPolicy.for_workspace(
-        WORKSPACE, writable=True, enable_network_access=unsafe
+        WORKSPACE,
+        writable=True,
+        enable_network_access=unsafe or enable_network_access,
     )
     if unsafe:
         shell, shell_arguments = (
@@ -34,7 +44,16 @@ def _build_sandbox(*, unsafe: bool) -> Sandbox:
         return UnsafeLocalSandbox(
             policy=policy, shell=shell, shell_arguments=shell_arguments
         )
-    return DockerSandbox(image=DOCKER_IMAGE, policy=policy)
+    return DockerSandbox(
+        image=DOCKER_IMAGE,
+        policy=policy,
+        mounts=(
+            BindMount.read_write(WORKSPACE, "/workspace"),
+            *mounts,
+        ),
+        inherit_environment=inherit_environment,
+        user="host",
+    )
 
 
 class BatchParams(BaseModel):
@@ -86,9 +105,46 @@ async def main() -> None:
         action="store_true",
         help="run commands directly on the host instead of the Docker sandbox",
     )
+    parser.add_argument(
+        "--network",
+        action="store_true",
+        help="allow network access inside the Docker sandbox",
+    )
+    parser.add_argument(
+        "--inherit-env",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="forward a host environment variable into Docker; repeatable",
+    )
+    parser.add_argument(
+        "--mount-ro",
+        action="append",
+        default=[],
+        nargs=2,
+        metavar=("HOST_PATH", "CONTAINER_PATH"),
+        help="add a read-only Docker bind mount; repeatable",
+    )
+    parser.add_argument(
+        "--mount-rw",
+        action="append",
+        default=[],
+        nargs=2,
+        metavar=("HOST_PATH", "CONTAINER_PATH"),
+        help="add a writable Docker bind mount with host write-back; repeatable",
+    )
     args = parser.parse_args()
 
-    sandbox = _build_sandbox(unsafe=args.unsafe)
+    mounts = (
+        *(BindMount.read_only(source, target) for source, target in args.mount_ro),
+        *(BindMount.read_write(source, target) for source, target in args.mount_rw),
+    )
+    sandbox = _build_sandbox(
+        unsafe=args.unsafe,
+        enable_network_access=args.network,
+        inherit_environment=args.inherit_env,
+        mounts=mounts,
+    )
     tools = _build_tools(sandbox, unsafe=args.unsafe)
 
     model = ChatCodex.from_codex_cli(model="gpt-5.6-terra")

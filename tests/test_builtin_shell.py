@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
 import agenttoolkit.builtins.shell.backends.docker as docker_backend
 from agenttoolkit.builtins.shell import (
+    BindMount,
     BubblewrapSandbox,
     DockerSandbox,
     Sandbox,
@@ -179,6 +180,105 @@ def test_docker_builds_a_hardened_command(tmp_path: Path) -> None:
     assert "EXTRA=two" in argv
     assert argv[-1] == "python -V"
     assert str(sandbox.container_path("read")) == "/mnt/path-0"
+
+
+def test_docker_supports_named_mounts_inherited_environment_and_user(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = tmp_path / "config"
+    config.mkdir()
+    output = tmp_path / "output"
+    output.mkdir()
+    monkeypatch.setenv("CLI_TOKEN", "secret")
+    monkeypatch.setattr(docker_backend.os, "getuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(docker_backend.os, "getgid", lambda: 1001, raising=False)
+
+    config_mount = BindMount.read_only(config, "/home/agent/.config/my-cli")
+    output_mount = BindMount.read_write(output, "/output")
+    sandbox = DockerSandbox(
+        "cli:latest",
+        SandboxPolicy.for_workspace(workspace),
+        mounts=(config_mount, output_mount),
+        inherit_environment=("CLI_TOKEN", "CLI_TOKEN"),
+        user="host",
+    )
+    argv = sandbox.build_argv("my-cli build")
+
+    assert sandbox.mounts == (config_mount, output_mount)
+    assert sandbox.inherit_environment == ("CLI_TOKEN",)
+    assert sandbox.user == "host"
+    assert ("--env", "CLI_TOKEN") == argv[argv.index("--env") : argv.index("--env") + 2]
+    assert "CLI_TOKEN=secret" not in argv
+    assert ("--user", "1000:1001") == argv[
+        argv.index("--user") : argv.index("--user") + 2
+    ]
+    assert (
+        f"type=bind,src={config.resolve()},dst=/home/agent/.config/my-cli,readonly"
+    ) in argv
+    assert f"type=bind,src={output.resolve()},dst=/output" in argv
+    assert sandbox.container_path(config / "settings.json") == PurePosixPath(
+        "/home/agent/.config/my-cli/settings.json"
+    )
+    assert sandbox.container_path(output / "artifact.txt") == PurePosixPath(
+        "/output/artifact.txt"
+    )
+
+
+def test_docker_validates_convenience_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    first = tmp_path / "first"
+    first.mkdir()
+    second = tmp_path / "second"
+    second.mkdir()
+
+    with pytest.raises(ValueError, match="absolute container path"):
+        BindMount.read_only(first, "relative")
+    with pytest.raises(ValueError, match="below '/'"):
+        BindMount.read_write(first, "/")
+    with pytest.raises(ValueError, match="source is configured more than once"):
+        DockerSandbox(
+            "image",
+            mounts=(
+                BindMount.read_only(first, "/first"),
+                BindMount.read_only(first, "/other"),
+            ),
+        )
+    with pytest.raises(ValueError, match="target is configured more than once"):
+        DockerSandbox(
+            "image",
+            mounts=(
+                BindMount.read_only(first, "/shared"),
+                BindMount.read_only(second, "/shared"),
+            ),
+        )
+    with pytest.raises(ValueError, match="variable name"):
+        DockerSandbox("image", inherit_environment=("BAD=NAME",))
+    with pytest.raises(ValueError, match="user"):
+        DockerSandbox("image", user=" ")
+
+    monkeypatch.delenv("MISSING_CLI_TOKEN", raising=False)
+    sandbox = DockerSandbox(
+        "image",
+        SandboxPolicy.for_workspace(workspace),
+        inherit_environment=("MISSING_CLI_TOKEN",),
+    )
+    with pytest.raises(ValueError, match="MISSING_CLI_TOKEN"):
+        sandbox.build_argv("true")
+
+    collision = DockerSandbox(
+        "image",
+        SandboxPolicy.for_workspace(workspace),
+        mounts=(BindMount.read_only(first, "/workspace"),),
+    )
+    with pytest.raises(ValueError, match="used by both"):
+        collision.build_argv("true")
 
 
 def test_docker_validates_image_command_mounts_and_cwd(tmp_path: Path) -> None:

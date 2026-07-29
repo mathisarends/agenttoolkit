@@ -1,4 +1,4 @@
-from .backends import BubblewrapSandbox, DockerSandbox, UnsafeLocalSandbox
+from .backends import BindMount, BubblewrapSandbox, DockerSandbox, UnsafeLocalSandbox
 from .policy import SandboxLimits, SandboxPolicy
 from .sandbox import (
     Sandbox,
@@ -9,6 +9,7 @@ from .sandbox import (
 )
 
 __all__ = [
+    "BindMount",
     "BubblewrapSandbox",
     "DockerSandbox",
     "Sandbox",

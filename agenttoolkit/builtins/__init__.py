@@ -8,6 +8,7 @@ from .fs import (
     WorkspaceError,
 )
 from .shell import (
+    BindMount,
     BubblewrapSandbox,
     DockerSandbox,
     Sandbox,
@@ -21,6 +22,7 @@ from .shell import (
 )
 
 __all__ = [
+    "BindMount",
     "BubblewrapSandbox",
     "DockerSandbox",
     "EditError",

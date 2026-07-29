@@ -2,7 +2,9 @@ import asyncio
 import os
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Self
 
 from agenttoolkit.builtins.shell.policy import SandboxPolicy
 from agenttoolkit.builtins.shell.sandbox import (
@@ -13,12 +15,59 @@ from agenttoolkit.builtins.shell.sandbox import (
 )
 
 
+@dataclass(frozen=True, slots=True, init=False)
+class BindMount:
+    source: Path
+    target: PurePosixPath
+    writable: bool
+
+    def __init__(
+        self,
+        source: str | os.PathLike[str],
+        target: str | PurePosixPath,
+        *,
+        writable: bool = False,
+    ) -> None:
+        normalized_source = Path(source).expanduser().resolve(strict=False)
+        normalized_target = PurePosixPath(target)
+        if (
+            not normalized_target.is_absolute()
+            or normalized_target == PurePosixPath("/")
+            or ".." in normalized_target.parts
+        ):
+            raise ValueError(
+                f"mount target must be an absolute container path below '/': {target!r}"
+            )
+        object.__setattr__(self, "source", normalized_source)
+        object.__setattr__(self, "target", normalized_target)
+        object.__setattr__(self, "writable", writable)
+
+    @classmethod
+    def read_only(
+        cls,
+        source: str | os.PathLike[str],
+        target: str | PurePosixPath,
+    ) -> Self:
+        return cls(source, target)
+
+    @classmethod
+    def read_write(
+        cls,
+        source: str | os.PathLike[str],
+        target: str | PurePosixPath,
+    ) -> Self:
+        return cls(source, target, writable=True)
+
+
 class DockerSandbox:
     def __init__(
         self,
         image: str,
         policy: SandboxPolicy | None = None,
         *,
+        mounts: Sequence[BindMount] = (),
+        inherit_environment: Sequence[str] = (),
+        user: str | None = None,
         executable: str = "docker",
         shell: str = "/bin/sh",
         shell_arguments: Sequence[str] = ("-lc",),
@@ -27,6 +76,11 @@ class DockerSandbox:
             raise ValueError("image must not be empty")
         self._image = image
         self._policy = policy or SandboxPolicy()
+        self._mount_definitions = _validate_mounts(mounts)
+        self._inherit_environment = _validate_environment_names(inherit_environment)
+        if user is not None and not user.strip():
+            raise ValueError("user must not be empty")
+        self._user = user
         self._executable = executable
         self._shell = shell
         self._shell_arguments = tuple(shell_arguments)
@@ -34,6 +88,18 @@ class DockerSandbox:
     @property
     def policy(self) -> SandboxPolicy:
         return self._policy
+
+    @property
+    def mounts(self) -> tuple[BindMount, ...]:
+        return self._mount_definitions
+
+    @property
+    def inherit_environment(self) -> tuple[str, ...]:
+        return self._inherit_environment
+
+    @property
+    def user(self) -> str | None:
+        return self._user
 
     async def execute(
         self,
@@ -111,6 +177,8 @@ class DockerSandbox:
             argv.extend(("--name", container_name))
         if not self._policy.enable_network_access:
             argv.extend(("--network", "none"))
+        if selected_user := _resolve_user(self._user):
+            argv.extend(("--user", selected_user))
 
         limits = self._policy.limits
         if limits.memory_bytes is not None:
@@ -129,6 +197,12 @@ class DockerSandbox:
         selected_env = dict(self._policy.environment)
         if env:
             selected_env.update(env)
+        for key in self._inherit_environment:
+            if key in selected_env:
+                continue
+            if key not in os.environ:
+                raise ValueError(f"host environment variable is not set: {key}")
+            argv.extend(("--env", key))
         for key, value in selected_env.items():
             argv.extend(("--env", f"{key}={value}"))
 
@@ -144,10 +218,6 @@ class DockerSandbox:
         if not requested.is_absolute():
             requested = working_directory / requested
         requested = requested.resolve(strict=False)
-        if (
-            self._policy.readable_paths or self._policy.writable_paths
-        ) and not self._policy.allows_read(requested):
-            raise PermissionError(f"path is not allowed by sandbox policy: {requested}")
         return _container_path(requested, self._mounts(working_directory))
 
     async def _remove_container(self, name: str) -> None:
@@ -180,16 +250,72 @@ class DockerSandbox:
                 raise FileNotFoundError(source)
             merged[source] = merged.get(source, False) or writable
 
+        explicit_sources = {mount.source for mount in self._mount_definitions}
         mounts: list[tuple[Path, PurePosixPath, bool]] = []
         extra_index = 0
         for source, writable in merged.items():
+            if source in explicit_sources:
+                continue
             if source == workspace:
                 target = PurePosixPath("/workspace")
             else:
                 target = PurePosixPath("/mnt") / f"path-{extra_index}"
                 extra_index += 1
             mounts.append((source, target, writable))
+        mounts.extend(
+            (mount.source, mount.target, mount.writable)
+            for mount in self._mount_definitions
+        )
+
+        targets: dict[PurePosixPath, Path] = {}
+        for source, target, _ in mounts:
+            if not source.exists():
+                raise FileNotFoundError(source)
+            if existing := targets.get(target):
+                raise ValueError(
+                    f"mount target {target} is used by both {existing} and {source}"
+                )
+            targets[target] = source
+        mounts.sort(key=lambda mount: len(mount[1].parts))
         return tuple(mounts)
+
+
+def _validate_mounts(mounts: Sequence[BindMount]) -> tuple[BindMount, ...]:
+    normalized = tuple(mounts)
+    sources: set[Path] = set()
+    targets: set[PurePosixPath] = set()
+    for mount in normalized:
+        if mount.source in sources:
+            raise ValueError(
+                f"mount source is configured more than once: {mount.source}"
+            )
+        if mount.target in targets:
+            raise ValueError(
+                f"mount target is configured more than once: {mount.target}"
+            )
+        sources.add(mount.source)
+        targets.add(mount.target)
+    return normalized
+
+
+def _validate_environment_names(names: Sequence[str]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for name in names:
+        if not name or "=" in name or "\x00" in name:
+            raise ValueError(f"invalid environment variable name: {name!r}")
+        if name not in normalized:
+            normalized.append(name)
+    return tuple(normalized)
+
+
+def _resolve_user(user: str | None) -> str | None:
+    if user != "host":
+        return user
+    getuid = getattr(os, "getuid", None)
+    getgid = getattr(os, "getgid", None)
+    if getuid is None or getgid is None:
+        return None
+    return f"{getuid()}:{getgid()}"
 
 
 def _container_path(
