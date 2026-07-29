@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import stat
 import tempfile
 from collections.abc import Sequence
@@ -33,6 +34,15 @@ class Entry:
     is_symlink: bool
     size: int | None = None
     modified: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GrepMatch:
+    path: str
+    line_number: int
+    line: str
+    context_before: tuple[str, ...] = ()
+    context_after: tuple[str, ...] = ()
 
 
 @runtime_checkable
@@ -67,6 +77,16 @@ class Workspace(Protocol):
     ) -> int: ...
 
     async def glob(self, pattern: str) -> Sequence[Entry]: ...
+
+    async def grep(
+        self,
+        pattern: str,
+        *,
+        glob: str | None = None,
+        case_sensitive: bool = True,
+        context_lines: int = 0,
+        max_matches: int | None = None,
+    ) -> Sequence[GrepMatch]: ...
 
     async def list_dir(
         self,
@@ -218,6 +238,78 @@ class LocalWorkspace:
             except OSError:
                 continue
         return sorted(matches, key=lambda entry: entry.path)
+
+    async def grep(
+        self,
+        pattern: str,
+        *,
+        glob: str | None = None,
+        case_sensitive: bool = True,
+        context_lines: int = 0,
+        max_matches: int | None = None,
+    ) -> Sequence[GrepMatch]:
+        return await asyncio.to_thread(
+            self._grep,
+            pattern,
+            glob,
+            case_sensitive,
+            context_lines,
+            max_matches,
+        )
+
+    def _grep(
+        self,
+        pattern: str,
+        glob: str | None,
+        case_sensitive: bool,
+        context_lines: int,
+        max_matches: int | None,
+    ) -> list[GrepMatch]:
+        if context_lines < 0:
+            raise ValueError("context_lines must be non-negative")
+        if max_matches is not None and max_matches < 0:
+            raise ValueError("max_matches must be non-negative or None")
+        try:
+            regex = re.compile(pattern, 0 if case_sensitive else re.IGNORECASE)
+        except re.error as error:
+            raise ValueError(f"invalid regex pattern: {pattern}") from error
+
+        candidates = (
+            self._glob(glob) if glob is not None else self._list_dir(".", True, None)
+        )
+        matches: list[GrepMatch] = []
+        for entry in candidates:
+            if entry.is_dir:
+                continue
+            if max_matches is not None and len(matches) >= max_matches:
+                break
+            try:
+                lines = (
+                    (self._root / entry.path)
+                    .read_text(encoding=self._encoding)
+                    .splitlines()
+                )
+            except (UnicodeDecodeError, OSError):
+                continue
+            for index, line in enumerate(lines):
+                if not regex.search(line):
+                    continue
+                matches.append(
+                    GrepMatch(
+                        path=entry.path,
+                        line_number=index + 1,
+                        line=line,
+                        context_before=tuple(
+                            lines[max(0, index - context_lines) : index]
+                        ),
+                        context_after=tuple(
+                            lines[index + 1 : index + 1 + context_lines]
+                        ),
+                    )
+                )
+                if max_matches is not None and len(matches) >= max_matches:
+                    break
+        return matches
 
     async def list_dir(
         self,

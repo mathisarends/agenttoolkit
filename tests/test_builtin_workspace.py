@@ -8,6 +8,7 @@ from agenttoolkit.builtins.fs import (
     EditError,
     Entry,
     FileTooLargeError,
+    GrepMatch,
     LocalWorkspace,
     PathOutsideWorkspaceError,
     Workspace,
@@ -101,6 +102,62 @@ async def test_workspace_directory_and_symlink_metadata(tmp_path: Path) -> None:
     assert entry is not None
     assert entry.is_symlink
     assert entry.is_dir
+
+
+@pytest.mark.asyncio
+async def test_workspace_grep_finds_matches_with_context(tmp_path: Path) -> None:
+    workspace = LocalWorkspace(tmp_path)
+    await workspace.write_file("src/a.py", "one\nneedle\nthree\n")
+    await workspace.write_file("src/b.py", "needle again\nunrelated\n")
+    await workspace.write_file("notes.txt", "no match here\n")
+
+    matches = await workspace.grep("needle")
+    assert [(match.path, match.line_number) for match in matches] == [
+        ("src/a.py", 2),
+        ("src/b.py", 1),
+    ]
+    assert all(isinstance(match, GrepMatch) for match in matches)
+
+    [with_context] = await workspace.grep("needle", glob="src/a.py", context_lines=1)
+    assert with_context.context_before == ("one",)
+    assert with_context.context_after == ("three",)
+
+
+@pytest.mark.asyncio
+async def test_workspace_grep_respects_glob_case_and_limit(tmp_path: Path) -> None:
+    workspace = LocalWorkspace(tmp_path)
+    await workspace.write_file("src/a.py", "Needle\nneedle\nneedle\n")
+    await workspace.write_file("notes.txt", "needle\n")
+
+    scoped = await workspace.grep("needle", glob="src/*.py")
+    assert [match.path for match in scoped] == ["src/a.py", "src/a.py"]
+
+    case_insensitive = await workspace.grep(
+        "needle", glob="src/*.py", case_sensitive=False
+    )
+    assert len(case_insensitive) == 3
+
+    limited = await workspace.grep("needle", glob="src/*.py", max_matches=1)
+    assert len(limited) == 1
+
+
+@pytest.mark.asyncio
+async def test_workspace_grep_validates_input_and_skips_binaries(
+    tmp_path: Path,
+) -> None:
+    workspace = LocalWorkspace(tmp_path)
+    (workspace.root / "binary.dat").write_bytes(b"\xff\xfe\x00needle")
+    await workspace.write_file("text.txt", "needle\n")
+
+    matches = await workspace.grep("needle")
+    assert [match.path for match in matches] == ["text.txt"]
+
+    with pytest.raises(ValueError, match="invalid regex pattern"):
+        await workspace.grep("(")
+    with pytest.raises(ValueError, match="non-negative"):
+        await workspace.grep("needle", context_lines=-1)
+    with pytest.raises(ValueError, match="non-negative"):
+        await workspace.grep("needle", max_matches=-1)
 
 
 def test_workspace_constructor_validation(tmp_path: Path) -> None:
