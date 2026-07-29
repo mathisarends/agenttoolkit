@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import PurePosixPath
 
 from pydantic import BaseModel, Field
