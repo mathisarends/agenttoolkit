@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -17,16 +15,16 @@ class SandboxLimits:
     cpus: float | None = None
 
     def __post_init__(self) -> None:
-        self._positive("timeout_seconds", self.timeout_seconds)
-        self._positive("max_output_bytes", self.max_output_bytes)
-        self._positive("memory_bytes", self.memory_bytes)
-        self._positive("pids", self.pids)
-        self._positive("cpus", self.cpus)
+        _positive("timeout_seconds", self.timeout_seconds)
+        _positive("max_output_bytes", self.max_output_bytes)
+        _positive("memory_bytes", self.memory_bytes)
+        _positive("pids", self.pids)
+        _positive("cpus", self.cpus)
 
-    @staticmethod
-    def _positive(name: str, value: int | float | None) -> None:
-        if value is not None and value <= 0:
-            raise ValueError(f"{name} must be positive or None")
+
+def _positive(name: str, value: int | float | None) -> None:
+    if value is not None and value <= 0:
+        raise ValueError(f"{name} must be positive or None")
 
 
 type PathInput = Path | str | os.PathLike[str]

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import os
 import uuid
@@ -91,7 +89,7 @@ class DockerSandbox:
             raise ValueError("command must not be empty")
         selected_cwd = self._policy.validate_working_directory(cwd)
         mounts = self._mounts(selected_cwd)
-        container_cwd = self._container_path(selected_cwd, mounts)
+        container_cwd = _container_path(selected_cwd, mounts)
 
         argv = [
             self._executable,
@@ -150,7 +148,7 @@ class DockerSandbox:
             self._policy.readable_paths or self._policy.writable_paths
         ) and not self._policy.allows_read(requested):
             raise PermissionError(f"path is not allowed by sandbox policy: {requested}")
-        return self._container_path(requested, self._mounts(working_directory))
+        return _container_path(requested, self._mounts(working_directory))
 
     async def _remove_container(self, name: str) -> None:
         try:
@@ -193,18 +191,18 @@ class DockerSandbox:
             mounts.append((source, target, writable))
         return tuple(mounts)
 
-    @staticmethod
-    def _container_path(
-        path: Path,
-        mounts: tuple[tuple[Path, PurePosixPath, bool], ...],
-    ) -> PurePosixPath:
-        candidates: list[tuple[int, PurePosixPath]] = []
-        for source, target, _ in mounts:
-            try:
-                relative = path.relative_to(source)
-            except ValueError:
-                continue
-            candidates.append((len(source.parts), target.joinpath(*relative.parts)))
-        if not candidates:
-            raise PermissionError(f"path is not mounted in container: {path}")
-        return max(candidates, key=lambda candidate: candidate[0])[1]
+
+def _container_path(
+    path: Path,
+    mounts: tuple[tuple[Path, PurePosixPath, bool], ...],
+) -> PurePosixPath:
+    candidates: list[tuple[int, PurePosixPath]] = []
+    for source, target, _ in mounts:
+        try:
+            relative = path.relative_to(source)
+        except ValueError:
+            continue
+        candidates.append((len(source.parts), target.joinpath(*relative.parts)))
+    if not candidates:
+        raise PermissionError(f"path is not mounted in container: {path}")
+    return max(candidates, key=lambda candidate: candidate[0])[1]
