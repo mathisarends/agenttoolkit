@@ -46,3 +46,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Import linter
+.import_linter_cache/
