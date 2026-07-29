@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from agenttoolkit.builtins.shell import (
     BindMount,
+    DockerNetworkMode,
     DockerSandbox,
     SandboxPolicy,
 )
@@ -48,10 +49,9 @@ def connected_sandbox(
             enable_network_access=True,
         ),
         mounts=mounts,
-        inherit_environment=tuple(
-            name for name in _CONNECTED_ENVIRONMENT if name in os.environ
-        ),
+        inherit_environment=_CONNECTED_ENVIRONMENT,
         user="host",
+        network_mode=DockerNetworkMode.HOST,
         shell="/bin/bash",
     )
 

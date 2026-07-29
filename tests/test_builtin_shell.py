@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 import pytest
 
@@ -9,6 +10,7 @@ import agenttoolkit.builtins.shell.backends.docker as docker_backend
 from agenttoolkit.builtins.shell import (
     BindMount,
     BubblewrapSandbox,
+    DockerNetworkMode,
     DockerSandbox,
     Sandbox,
     SandboxExecutionError,
@@ -227,6 +229,21 @@ def test_docker_supports_named_mounts_inherited_environment_and_user(
     )
 
 
+def test_docker_supports_an_explicit_network_mode(tmp_path: Path) -> None:
+    sandbox = DockerSandbox(
+        "cli:latest",
+        SandboxPolicy.for_workspace(tmp_path, enable_network_access=True),
+        network_mode=DockerNetworkMode.HOST,
+    )
+
+    argv = sandbox.build_argv("cli status")
+
+    assert sandbox.network_mode is DockerNetworkMode.HOST
+    assert ("--network", "host") == argv[
+        argv.index("--network") : argv.index("--network") + 2
+    ]
+
+
 def test_docker_validates_convenience_configuration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -262,6 +279,10 @@ def test_docker_validates_convenience_configuration(
         DockerSandbox("image", inherit_environment=("BAD=NAME",))
     with pytest.raises(ValueError, match="user"):
         DockerSandbox("image", user=" ")
+    with pytest.raises(TypeError, match="DockerNetworkMode"):
+        DockerSandbox("image", network_mode=cast(DockerNetworkMode, "host"))
+    with pytest.raises(ValueError, match="requires network access"):
+        DockerSandbox("image", network_mode=DockerNetworkMode.HOST)
 
     monkeypatch.delenv("MISSING_CLI_TOKEN", raising=False)
     sandbox = DockerSandbox(

@@ -3,6 +3,7 @@ import os
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Self
 
@@ -13,6 +14,11 @@ from agenttoolkit.builtins.shell.sandbox import (
     SandboxUnavailableError,
     run_process,
 )
+
+
+class DockerNetworkMode(StrEnum):
+    BRIDGE = "bridge"
+    HOST = "host"
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -68,6 +74,7 @@ class DockerSandbox:
         mounts: Sequence[BindMount] = (),
         inherit_environment: Sequence[str] = (),
         user: str | None = None,
+        network_mode: DockerNetworkMode | None = None,
         executable: str = "docker",
         shell: str = "/bin/sh",
         shell_arguments: Sequence[str] = ("-lc",),
@@ -81,6 +88,14 @@ class DockerSandbox:
         if user is not None and not user.strip():
             raise ValueError("user must not be empty")
         self._user = user
+        if network_mode is not None:
+            if not isinstance(network_mode, DockerNetworkMode):
+                raise TypeError("network mode must be a DockerNetworkMode")
+            if not self._policy.enable_network_access:
+                raise ValueError(
+                    "network mode requires network access to be enabled by policy"
+                )
+        self._network_mode = network_mode
         self._executable = executable
         self._shell = shell
         self._shell_arguments = tuple(shell_arguments)
@@ -100,6 +115,10 @@ class DockerSandbox:
     @property
     def user(self) -> str | None:
         return self._user
+
+    @property
+    def network_mode(self) -> DockerNetworkMode | None:
+        return self._network_mode
 
     async def execute(
         self,
@@ -175,7 +194,9 @@ class DockerSandbox:
             argv.append("-i")
         if container_name is not None:
             argv.extend(("--name", container_name))
-        if not self._policy.enable_network_access:
+        if self._network_mode is not None:
+            argv.extend(("--network", self._network_mode.value))
+        elif not self._policy.enable_network_access:
             argv.extend(("--network", "none"))
         if selected_user := _resolve_user(self._user):
             argv.extend(("--user", selected_user))

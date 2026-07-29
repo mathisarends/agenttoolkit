@@ -1,4 +1,10 @@
-from .backends import BindMount, BubblewrapSandbox, DockerSandbox, UnsafeLocalSandbox
+from .backends import (
+    BindMount,
+    BubblewrapSandbox,
+    DockerNetworkMode,
+    DockerSandbox,
+    UnsafeLocalSandbox,
+)
 from .policy import SandboxLimits, SandboxPolicy
 from .sandbox import (
     Sandbox,
@@ -11,6 +17,7 @@ from .sandbox import (
 __all__ = [
     "BindMount",
     "BubblewrapSandbox",
+    "DockerNetworkMode",
     "DockerSandbox",
     "Sandbox",
     "SandboxError",
