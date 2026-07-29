@@ -1,12 +1,10 @@
-import base64
 import logging
 from collections.abc import Iterator, Sequence
 from html import escape
 from pathlib import Path
 from typing import Self
 
-from agenttoolkit.skills.models import Skill, parse_skill
-from agenttoolkit.skills.scripts import run_script
+from agenttoolkit.skills.models import LoadedSkill, Skill, parse_skill
 
 logger = logging.getLogger(__name__)
 
@@ -42,19 +40,13 @@ class Skills:
                 f"Skill '{name}' not found. Available skills: {available}."
             ) from error
 
-    def load(self, name: str) -> str:
+    def load(self, name: str) -> LoadedSkill:
         skill = self._current(name)
-        files = "\n".join(
-            f"<file>{escape(path)}</file>" for path in self._resource_paths(skill)
-        )
-        return (
-            f'<skill_content name="{escape(skill.name)}">\n'
-            f"# Skill: {skill.name}\n\n"
-            f"{skill.instructions}\n\n"
-            "<skill_files>\n"
-            f"{files}\n"
-            "</skill_files>\n"
-            "</skill_content>"
+        return LoadedSkill(
+            name=skill.name,
+            instructions=skill.instructions,
+            directory=skill.directory,
+            resources=tuple(self._resource_paths(skill)),
         )
 
     def catalog(self) -> str:
@@ -70,32 +62,6 @@ class Skills:
         if not entries:
             return ""
         return f"<available_skills>\n{entries}\n</available_skills>"
-
-    def read_resource(self, name: str, path: str) -> str:
-        skill = self._current(name)
-        resource = self._resolve(skill, path)
-        try:
-            content = resource.read_bytes()
-        except OSError as error:
-            raise ValueError(
-                f"Could not read resource '{path}' from skill '{name}': {error}"
-            ) from error
-
-        try:
-            return content.decode("utf-8")
-        except UnicodeDecodeError:
-            return f"base64: {base64.b64encode(content).decode('ascii')}"
-
-    async def run_script(
-        self,
-        name: str,
-        path: str,
-        args: Sequence[str] = (),
-        timeout: int = 60,
-    ) -> str:
-        skill = self._current(name)
-        script = self._resolve(skill, path)
-        return await run_script(script, args, cwd=skill.directory, timeout=timeout)
 
     def __iter__(self) -> Iterator[Skill]:
         return iter(self._skills.values())
@@ -158,25 +124,3 @@ class Skills:
                     candidate,
                 )
         return sorted(resources)
-
-    def _resolve(self, skill: Skill, resource_path: str) -> Path:
-        candidate = Path(resource_path)
-        if candidate.is_absolute():
-            raise ValueError("Skill resource paths must be relative.")
-
-        try:
-            resolved = (skill.directory / candidate).resolve(strict=True)
-        except OSError as error:
-            available = self._resource_paths(skill)
-            raise ValueError(
-                f"Resource '{resource_path}' not found in skill '{skill.name}'. "
-                f"Available resources: {available}."
-            ) from error
-
-        if not resolved.is_relative_to(skill.directory) or not resolved.is_file():
-            raise ValueError(
-                f"Resource '{resource_path}' is outside skill '{skill.name}'."
-            )
-        if resolved == skill.location:
-            raise ValueError("Use load_skill to read SKILL.md.")
-        return resolved

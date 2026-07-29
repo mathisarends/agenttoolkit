@@ -128,7 +128,7 @@ def test_missing_skill_file_is_reported_as_value_error(tmp_path: Path) -> None:
         parse_skill(tmp_path / "missing" / "SKILL.md")
 
 
-def test_collection_rejects_empty_missing_and_file_roots(tmp_path: Path) -> None:
+def test_skills_reject_empty_missing_and_file_roots(tmp_path: Path) -> None:
     file_root = tmp_path / "file.txt"
     file_root.write_text("not a directory", encoding="utf-8")
 
@@ -170,40 +170,26 @@ def test_missing_skill_lists_available_names(tmp_path: Path) -> None:
         skills.get("missing")
 
 
-def test_resource_errors_do_not_escape_skill_boundary(tmp_path: Path) -> None:
+def test_load_refreshes_instructions_from_disk(tmp_path: Path) -> None:
     directory = make_skill(tmp_path)
-    (directory / "folder").mkdir()
     skills = Skills.from_local_dir(tmp_path)
-
-    with pytest.raises(ValueError, match="must be relative"):
-        skills.read_resource("internet-research", str((tmp_path / "x").resolve()))
-    with pytest.raises(ValueError, match="not found"):
-        skills.read_resource("internet-research", "missing.md")
-    with pytest.raises(ValueError, match="outside skill"):
-        skills.read_resource("internet-research", "folder")
-    with pytest.raises(ValueError, match="Use load_skill"):
-        skills.read_resource("internet-research", "SKILL.md")
-
-
-@pytest.mark.asyncio
-async def test_script_failures_and_timeout_validation_are_returned_safely(
-    tmp_path: Path,
-) -> None:
-    directory = make_skill(tmp_path)
-    scripts = directory / "scripts"
-    scripts.mkdir()
-    (scripts / "fail.py").write_text(
-        "import sys\nprint('details', file=sys.stderr)\nraise SystemExit(7)\n",
+    (directory / "SKILL.md").write_text(
+        skill_source(instructions="# Research\n\nUse the updated workflow."),
         encoding="utf-8",
     )
+
+    loaded = skills.load("internet-research")
+
+    assert loaded.instructions.endswith("Use the updated workflow.")
+
+
+def test_load_rejects_skill_renamed_after_discovery(tmp_path: Path) -> None:
+    directory = make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
+    (directory / "SKILL.md").write_text(
+        skill_source(name="different-name"),
+        encoding="utf-8",
+    )
 
-    failed = await skills.run_script("internet-research", "scripts/fail.py")
-
-    assert failed == "Error (exit code 7): details"
-    with pytest.raises(ValueError, match="at least one second"):
-        await skills.run_script(
-            "internet-research",
-            "scripts/fail.py",
-            timeout=0,
-        )
+    with pytest.raises(ValueError, match="must match its parent directory"):
+        skills.load("internet-research")

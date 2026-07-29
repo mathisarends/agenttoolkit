@@ -28,6 +28,14 @@ class Skill:
         return self.directory / "SKILL.md"
 
 
+@dataclass(frozen=True, slots=True)
+class LoadedSkill:
+    name: str
+    instructions: str
+    directory: Path
+    resources: tuple[str, ...]
+
+
 def parse_skill(path: str | Path) -> Skill:
     resolved_path = Path(path).resolve()
     try:

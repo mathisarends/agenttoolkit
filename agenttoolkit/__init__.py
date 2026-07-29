@@ -1,4 +1,4 @@
-from .skills import Skill, Skills, parse_skill
+from .skills import LoadedSkill, Skill, Skills, parse_skill
 from .tools import (
     ActionResult,
     Inject,
@@ -21,6 +21,7 @@ from .tools import (
 __all__ = [
     "ActionResult",
     "Inject",
+    "LoadedSkill",
     "Skill",
     "Skills",
     "Tool",

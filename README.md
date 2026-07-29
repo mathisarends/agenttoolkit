@@ -456,28 +456,29 @@ skills = Skills.from_local_dir("./skills")
 # Put the compact catalog in the agent's system prompt.
 system_prompt = f"You are helpful.\n\n{skills.catalog()}"
 
-# Progressive loading: full instructions + file listing for one skill...
-instructions = skills.load("internet-research")
+# Progressive loading returns full instructions and relative resource paths.
+loaded = skills.load("internet-research")
+system_prompt += f"\n\n{loaded.instructions}"
 
-# ...then read a specific resource, or run a bundled script, on demand.
-resource = skills.read_resource("internet-research", "references/guide.md")
-output = await skills.run_script(
-    "internet-research", "scripts/search.py", args=["python packaging"]
+# The application decides which general filesystem and process tools to expose.
+guide = read_file(loaded.directory / "references/guide.md")
+output = await run_process(
+    ["python", "scripts/search.py", "python packaging"],
+    cwd=loaded.directory,
 )
 ```
 
 `Skills.from_local_dir` accepts multiple directories; a skill discovered
 later overrides one with the same name from an earlier directory (logged as
-a warning). `SKILL.md` is re-parsed from disk on each `load`/`get`, so
-instructions can be edited without restarting the process.
+a warning). `SKILL.md` is re-parsed from disk on each `load`, so instructions
+can be edited without restarting the process.
 
-Resource paths are confined to the selected skill's directory — absolute
-paths and traversal outside it are rejected. Scripts run directly via their
-interpreter (no shell) with a configurable timeout (default 60s); `.py`
-scripts use the current Python interpreter, `.sh`/`.bash` require `bash` on
-`PATH`. `run_script` never raises for script failures — it returns the
-process's stdout, or an `Error: ...` string. Skill directories and their
-scripts must still be treated as trusted code.
+`load()` returns an immutable `LoadedSkill` containing `name`, `instructions`,
+the absolute skill `directory`, and sorted relative `resources`. Resource
+reading, process execution, timeouts, sandboxing, and permissions deliberately
+belong to the application's general filesystem and process tools instead of
+the Skills API. Skill directories and their scripts must still be treated as
+trusted code.
 
 ## Development
 

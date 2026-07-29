@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit import (
+    LoadedSkill,
     Skills,
     parse_skill,
 )
@@ -58,12 +59,12 @@ def test_progressive_load_lists_resources_without_reading_them(
     skills = Skills.from_local_dir(tmp_path)
     loaded = skills.load("internet-research")
 
-    assert "Use the bundled workflow" in loaded
-    assert "<file>references/guide.md</file>" in loaded
-    assert "Loaded later." not in loaded
-    assert skills.read_resource("internet-research", "references/guide.md") == (
-        "Loaded later."
-    )
+    assert isinstance(loaded, LoadedSkill)
+    assert loaded.name == "internet-research"
+    assert "Use the bundled workflow" in loaded.instructions
+    assert loaded.directory == directory.resolve()
+    assert loaded.resources == ("references/guide.md",)
+    assert "Loaded later." not in loaded.instructions
 
 
 def test_catalog_contains_only_name_and_description(tmp_path: Path) -> None:
@@ -76,15 +77,13 @@ def test_catalog_contains_only_name_and_description(tmp_path: Path) -> None:
     assert "Use the bundled workflow" not in catalog
 
 
-def test_binary_resource_is_base64_and_escape_is_rejected(tmp_path: Path) -> None:
+def test_load_describes_binary_resources_without_reading_them(tmp_path: Path) -> None:
     directory = make_skill(tmp_path)
     (directory / "logo.bin").write_bytes(b"\xff\x00")
-    (tmp_path / "secret.txt").write_text("secret", encoding="utf-8")
-    skills = Skills.from_local_dir(tmp_path)
+    loaded = Skills.from_local_dir(tmp_path).load("internet-research")
 
-    assert skills.read_resource("internet-research", "logo.bin").startswith("base64: ")
-    with pytest.raises(ValueError, match="outside skill"):
-        skills.read_resource("internet-research", "../secret.txt")
+    assert loaded.resources == ("logo.bin",)
+    assert loaded.directory / loaded.resources[0] == directory / "logo.bin"
 
 
 def test_invalid_skill_name_is_rejected(tmp_path: Path) -> None:
@@ -94,8 +93,9 @@ def test_invalid_skill_name_is_rejected(tmp_path: Path) -> None:
         Skills.from_local_dir(tmp_path)
 
 
-@pytest.mark.asyncio
-async def test_runs_python_script_without_shell(tmp_path: Path) -> None:
+def test_load_exposes_script_path_for_a_general_process_runner(
+    tmp_path: Path,
+) -> None:
     directory = make_skill(tmp_path)
     scripts = directory / "scripts"
     scripts.mkdir()
@@ -103,12 +103,7 @@ async def test_runs_python_script_without_shell(tmp_path: Path) -> None:
         "import sys\nprint('|'.join(sys.argv[1:]))\n",
         encoding="utf-8",
     )
-    skills = Skills.from_local_dir(tmp_path)
+    loaded = Skills.from_local_dir(tmp_path).load("internet-research")
 
-    output = await skills.run_script(
-        "internet-research",
-        "scripts/echo.py",
-        ["hello", "world"],
-    )
-
-    assert output == "hello|world"
+    assert loaded.resources == ("scripts/echo.py",)
+    assert loaded.directory / loaded.resources[0] == scripts / "echo.py"

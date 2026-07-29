@@ -1,4 +1,3 @@
-import asyncio
 import tempfile
 from pathlib import Path
 
@@ -24,7 +23,7 @@ def _make_skills_dir(root: Path) -> Path:
     return root
 
 
-async def main() -> None:
+def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         skills_root = _make_skills_dir(Path(tmp))
         skills = Skills.from_local_dir(skills_root)
@@ -33,12 +32,16 @@ async def main() -> None:
         # any particular skill's full instructions.
         print(skills.catalog())
 
-        # Full instructions plus a manifest of the skill's own resource files.
-        print(skills.load("greeting"))
+        # Full instructions plus paths to resources that can be read or executed
+        # through the application's general filesystem and process tools.
+        loaded = skills.load("greeting")
+        print(loaded.instructions)
+        print(loaded.resources)
 
-        # Resources are read on demand and scoped to the skill's directory.
-        print(skills.read_resource("greeting", "template.txt"))
+        # This direct read stands in for the application's general filesystem tool.
+        template_path = loaded.directory / loaded.resources[0]
+        print(template_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
