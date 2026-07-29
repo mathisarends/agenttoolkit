@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+from pathlib import PurePosixPath
+
+from pydantic import BaseModel, Field
+
+from agenttoolkit import Skills
+from agenttoolkit.tools import ActionResult, Inject, Tools
+
+
+class LoadSkillParams(BaseModel):
+    name: str = Field(description="Exact skill name from <available_skills>")
+
+
+def register_skill_loader(
+    tools: Tools,
+    *,
+    container_root: str | PurePosixPath = "/skills",
+) -> None:
+    root = PurePosixPath(container_root)
+
+    @tools.action(
+        "Load one skill's full instructions, directory, and resource list.",
+        name="load_skill",
+        params=LoadSkillParams,
+    )
+    def load_skill(
+        params: LoadSkillParams,
+        skills: Inject[Skills],
+    ) -> ActionResult[object]:
+        loaded = skills.load(params.name)
+        return ActionResult[object].success(
+            {
+                "name": loaded.name,
+                "instructions": loaded.instructions,
+                "directory": str(root / loaded.name),
+                "resources": list(loaded.resources),
+            }
+        )

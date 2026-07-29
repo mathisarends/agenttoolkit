@@ -1,6 +1,5 @@
 import asyncio
 import datetime as dt
-import sys
 from dataclasses import dataclass
 
 from llmify import ChatCodex
@@ -9,13 +8,13 @@ from pydantic import BaseModel, Field
 from agenttoolkit.tools import (
     ActionResult,
     Inject,
-    Tool,
     ToolContext,
     Tools,
     description_from_context,
     requires,
 )
 from experiments.agent import Agent
+from experiments.environments import Console
 
 
 @dataclass
@@ -116,61 +115,20 @@ def get_weather(city: str) -> WeatherActionResult:
     return WeatherActionResult.success(WeatherResult(city=city, temp_c=temp_c))
 
 
-def _print_registered_tools() -> None:
-    print("Registered tools (available in current context):")
-    for tool in tools.get_available():
-        flags = []
-        if tool.requires_approval:
-            flags.append("requires_approval")
-        if tool.available_when is not None:
-            flags.append("gated")
-        flag_str = f" [{', '.join(flags)}]" if flags else ""
-        print(f"  - {tool.name}: {tool.resolve_description(context)}{flag_str}")
-    print()
-
-
-def _on_tool_call(name: str, arguments: dict) -> None:
-    tool: Tool | None = tools.get(name)
-    status = tool.format_status(arguments) if tool else None
-    label = f" ({status})" if status else ""
-    print(f"  -> tool call: {name}({arguments}){label}")
-
-
-def _on_tool_result(name: str, result: ActionResult[object]) -> None:
-    if result.ok:
-        print(f"  <- tool result [{name}]: {result.result}")
-    else:
-        print(f"  <- tool FAILED [{name}]: {result.error}")
-
-
-def _confirm(name: str, arguments: dict) -> bool:
-    answer = input(f"  ?? approve '{name}({arguments})'? [y/N] ").strip().lower()
-    return answer == "y"
-
-
 async def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8")
+    console = Console(tools, context=context)
     model = ChatCodex.from_codex_cli(model="gpt-5.6-terra")
     agent = Agent(
         model,
         tools,
         system_prompt="You are a helpful assistant.",
-        on_tool_call=_on_tool_call,
-        on_tool_result=_on_tool_result,
-        confirm=_confirm,
+        on_tool_call=console.on_tool_call,
+        on_tool_result=console.on_tool_result,
+        confirm=console.confirm,
     )
 
-    _print_registered_tools()
-    print("Chat gestartet. 'exit' zum Beenden.")
-    while True:
-        user_input = input("you> ").strip()
-        if user_input in ("exit", "quit"):
-            break
-        if not user_input:
-            continue
-
-        reply = await agent.run(user_input)
-        print(f"agent> {reply}")
+    console.print_tools()
+    await console.run(agent, "Chat gestartet. 'exit' zum Beenden.")
 
 
 if __name__ == "__main__":
