@@ -38,13 +38,13 @@ class Tools:
             self._invoke,
         )
 
-    def action(
+    def action[ParamsT: BaseModel](
         self,
         description: str | ToolDescription,
         name: str | None = None,
         *,
-        params: type[BaseModel] | None = None,
-        status: StatusFormatter | None = None,
+        params: type[ParamsT] | None = None,
+        status: StatusFormatter[ParamsT] | None = None,
         kind: str = "generic",
         requires_approval: bool = False,
         available_when: ToolAvailability | None = None,

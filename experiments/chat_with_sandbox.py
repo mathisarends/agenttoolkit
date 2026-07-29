@@ -15,7 +15,7 @@ from agenttoolkit.builtins.shell import (
     SandboxPolicy,
     UnsafeLocalSandbox,
 )
-from agenttoolkit.tools import ActionResult, Tools
+from agenttoolkit.tools import ActionResult, Inject, ToolContext, Tools
 from experiments.agent import Agent
 
 DOCKER_IMAGE = "python:3.14-slim"
@@ -42,19 +42,20 @@ class BatchParams(BaseModel):
 
 
 def _build_tools(sandbox: Sandbox, *, unsafe: bool) -> Tools:
-    tools = Tools()
+    tools = Tools(context=ToolContext(sandbox))
 
     @tools.action(
         "Run a shell command in the sandbox and return its stdout/stderr",
         params=BatchParams,
-        status="Running: {command}",
+        status=lambda params: f"Running: {params.command}",
         requires_approval=unsafe,
     )
-    async def batch(params: BatchParams) -> ActionResult[str]:
+    async def batch(params: BatchParams, sandbox: Inject[Sandbox]) -> ActionResult[str]:
         result = await sandbox.execute(params.command)
         if not result.ok:
             return ActionResult[str].fail(
-                f"exit={result.returncode} timed_out={result.timed_out}\n{result.output}"
+                f"exit={result.returncode} timed_out={result.timed_out}\n"
+                f"{result.output}"
             )
         return ActionResult[str].success(result.output)
 

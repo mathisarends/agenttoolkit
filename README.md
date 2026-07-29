@@ -131,7 +131,9 @@ class RefundParams(BaseModel):
     "Issue a refund for an order.",
     params=RefundParams,
     kind="write",
-    status="Refunding {amount} for order {order_id}...",
+    status=lambda params: (
+        f"Refunding {params.amount} for order {params.order_id}..."
+    ),
     tags=["billing", "write"],
     requires_approval=True,
     metadata={"owner": "billing-team"},
@@ -148,9 +150,10 @@ exist for the host loop that dispatches the call:
 - `kind` — a free-form category (e.g. `"read"`, `"write"`), readable as
   `tool.kind`.
 - `status` — a human-readable status message, either a `str.format`
-  template referencing parameter names or a `Callable[[BaseModel], str]`
-  for more complex formatting. Render it with `tool.format_status(args)`
-  (e.g. to show "Refunding 20.0 for order o-123..." while the call runs).
+  template referencing parameter names or a callable. For callables, the
+  parameter type is inferred from `params`, providing type checking and IDE
+  navigation. Render it with `tool.format_status(args)` (e.g. to show
+  "Refunding 20.0 for order o-123..." while the call runs).
 - `tags` — a `frozenset[str]` for grouping or filtering tools, readable as
   `tool.tags`.
 - `metadata` — an arbitrary read-only mapping for anything else the host
@@ -169,8 +172,8 @@ tool.format_status({"order_id": "o-123", "amount": 20.0})
 # "Refunding 20.0 for order o-123..."
 ```
 
-`status` is validated against `params` at registration time, so a typo in
-a placeholder name (`"{amout}"`) fails fast instead of at call time.
+String `status` templates are validated against `params` at registration
+time. Callable field access is checked statically by the IDE or type checker.
 
 Prefer `tools.action(...)` for registering tools. Direct registration is an
 internal implementation detail.

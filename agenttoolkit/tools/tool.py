@@ -20,7 +20,7 @@ class ToolSchemaFormat(StrEnum):
     ANTHROPIC = "anthropic"
 
 
-type StatusFormatter = str | Callable[[BaseModel], str]
+type StatusFormatter[ParamsT: BaseModel] = str | Callable[[ParamsT], str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +28,7 @@ class ToolMetadata:
     """Runtime hints which do not belong in an LLM function schema."""
 
     kind: str = "generic"
-    status: StatusFormatter | None = None
+    status: StatusFormatter[Any] | None = None
     tags: frozenset[str] = field(default_factory=frozenset)
     extra: Mapping[str, Any] = field(default_factory=dict)
 
@@ -67,7 +67,7 @@ class Tool:
         return self._metadata.kind
 
     @property
-    def status(self) -> StatusFormatter | None:
+    def status(self) -> StatusFormatter[Any] | None:
         return self._metadata.status
 
     @property
