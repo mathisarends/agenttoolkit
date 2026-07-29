@@ -30,13 +30,13 @@ def delete_account() -> str:
 
 
 async def main() -> None:
-    print("no context:", [tool.name for tool in tools.available()])
+    print("no context:", [tool.name for tool in tools.get_available()])
 
     tools.set_context(ToolContext(UserInfo(name="Mathis")))
-    print("regular user:", [tool.name for tool in tools.available()])
+    print("regular user:", [tool.name for tool in tools.get_available()])
 
     tools.set_context(ToolContext(UserInfo(name="Mathis", is_admin=True)))
-    print("admin:", [tool.name for tool in tools.available()])
+    print("admin:", [tool.name for tool in tools.get_available()])
 
 
 if __name__ == "__main__":

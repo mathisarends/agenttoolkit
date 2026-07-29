@@ -172,9 +172,8 @@ tool.format_status({"order_id": "o-123", "amount": 20.0})
 `status` is validated against `params` at registration time, so a typo in
 a placeholder name (`"{amout}"`) fails fast instead of at call time.
 
-Constructing a `Tool` directly (`from agenttoolkit import Tool, ToolMetadata`)
-and calling `tools.register(tool)` is available for building tools
-programmatically, but is rarely needed — prefer the decorator.
+Prefer `tools.action(...)` for registering tools. Direct registration is an
+internal implementation detail.
 
 ## Dependency injection with `ToolContext`
 
@@ -262,9 +261,10 @@ else:
     result = await tools.execute(name, arguments, context=context)
 ```
 
-`Tools.available(context=...)` returns the underlying `Tool` objects instead
-of schemas — handy for printing a catalog of what's currently exposed
-(`tool.name`, `tool.resolve_description(context)`, `tool.kind`, ...).
+`Tools.get_available()` returns the underlying `Tool` objects for the active
+registry context instead of schemas — handy for printing a catalog of what's
+currently exposed (`tool.name`, `tool.resolve_description(context)`,
+`tool.kind`, ...).
 
 ## Results (`ActionResult`)
 

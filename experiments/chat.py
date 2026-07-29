@@ -118,7 +118,7 @@ def get_weather(city: str) -> WeatherActionResult:
 
 def _print_registered_tools() -> None:
     print("Registered tools (available in current context):")
-    for tool in tools.available():
+    for tool in tools.get_available():
         flags = []
         if tool.requires_approval:
             flags.append("requires_approval")

@@ -53,7 +53,7 @@ class Tools:
     ) -> Callable:
         def decorator(func: Callable) -> Callable:
             function_name = getattr(func, "__name__", type(func).__name__)
-            self.register(
+            self._register(
                 Tool(
                     name=name or function_name,
                     description=description,
@@ -73,14 +73,11 @@ class Tools:
 
         return decorator
 
-    def register(self, tool: Tool, *, replace: bool = False) -> Tool:
+    def _register(self, tool: Tool, *, replace: bool = False) -> Tool:
         if tool.name in self._tools and not replace:
             raise ValueError(f"Tool '{tool.name}' already registered")
         self._tools[tool.name] = tool
         return tool
-
-    def inject_tool(self, tool: Tool, *, replace: bool = False) -> Tool:
-        return self.register(tool, replace=replace)
 
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
@@ -88,10 +85,9 @@ class Tools:
     def set_context(self, context: ToolContext | None) -> None:
         self._context = context
 
-    def available(self, context: ToolContext | None = None) -> list[Tool]:
-        active_context = self._context if context is None else context
+    def get_available(self) -> list[Tool]:
         return [
-            tool for tool in self._tools.values() if tool.is_available(active_context)
+            tool for tool in self._tools.values() if tool.is_available(self._context)
         ]
 
     @overload
@@ -158,7 +154,9 @@ class Tools:
         models: list[type[BaseModel]] = []
         active_context = self._context if context is None else context
 
-        for tool in self.available(context):
+        for tool in self._tools.values():
+            if not tool.is_available(active_context):
+                continue
             if included is not None and tool.name not in included:
                 continue
             models.append(
@@ -197,7 +195,7 @@ class Tools:
 
     def merge(self, other: "Tools", *, replace: bool = False) -> None:
         for tool in other:
-            self.register(tool, replace=replace)
+            self._register(tool, replace=replace)
 
     def __iter__(self) -> Iterator[Tool]:
         return iter(self._tools.values())
