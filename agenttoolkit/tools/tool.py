@@ -2,6 +2,7 @@ import inspect
 import json
 import re
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -45,6 +46,7 @@ class Tool:
         fn: Callable,
         *,
         param_model: type[BaseModel] | None = None,
+        parameters: Mapping[str, Any] | None = None,
         metadata: ToolMetadata | None = None,
         requires_approval: bool = False,
         available_when: ToolAvailability | None = None,
@@ -59,7 +61,11 @@ class Tool:
         self.requires_approval = requires_approval
         self.available_when = available_when
         self.input_model = _schema_model(fn, param_model=param_model)
-        self.parameters = self.input_model.model_json_schema(mode="validation")
+        self.parameters = (
+            deepcopy(dict(parameters))
+            if parameters is not None
+            else self.input_model.model_json_schema(mode="validation")
+        )
         self._validate_status()
 
     @property

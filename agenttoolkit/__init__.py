@@ -1,3 +1,14 @@
+from .mcp import (
+    MCPClient,
+    MCPServerClient,
+    MCPToolConfigurator,
+    MCPToolPage,
+    MCPToolRegistration,
+    MCPToolSpec,
+    SSEMCPClient,
+    StdioMCPClient,
+    StreamableHTTPMCPClient,
+)
 from .skills import LoadedSkill, Skill, Skills, parse_skill
 from .tools import (
     ActionResult,
@@ -22,8 +33,17 @@ __all__ = [
     "ActionResult",
     "Inject",
     "LoadedSkill",
+    "MCPClient",
+    "MCPServerClient",
+    "MCPToolConfigurator",
+    "MCPToolPage",
+    "MCPToolRegistration",
+    "MCPToolSpec",
+    "SSEMCPClient",
     "Skill",
     "Skills",
+    "StdioMCPClient",
+    "StreamableHTTPMCPClient",
     "Tool",
     "ToolAvailability",
     "ToolCall",
