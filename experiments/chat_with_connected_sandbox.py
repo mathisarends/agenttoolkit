@@ -68,7 +68,7 @@ async def main() -> None:
     )
     console = Console(tools)
     agent = Agent(
-        ChatCodex.from_codex_cli(model="gpt-5.6-terra"),
+        ChatCodex.from_codex_cli(model="gpt-5.6-sol"),
         tools,
         system_prompt=_system_prompt(skills),
         on_tool_call=console.on_tool_call,
