@@ -453,8 +453,8 @@ from agenttoolkit import Skills
 
 skills = Skills.from_local_dir("./skills")
 
-# Put the compact catalog in the agent's system prompt.
-system_prompt = f"You are helpful.\n\n{skills.catalog()}"
+# Render the compact skill listing for the agent's system prompt.
+system_prompt = f"You are helpful.\n\n{skills.render_prompt()}"
 
 # Progressive loading returns full instructions and relative resource paths.
 loaded = skills.load("internet-research")

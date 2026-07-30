@@ -65,14 +65,14 @@ def test_progressive_load_lists_resources_without_reading_them(
     assert "Loaded later." not in loaded.instructions
 
 
-def test_catalog_contains_only_name_and_description(tmp_path: Path) -> None:
+def test_render_prompt_contains_only_name_and_description(tmp_path: Path) -> None:
     make_skill(tmp_path)
 
-    catalog = Skills.from_local_dir(tmp_path).catalog()
+    prompt = Skills.from_local_dir(tmp_path).render_prompt()
 
-    assert "<name>internet-research</name>" in catalog
-    assert "<description>Research current sources.</description>" in catalog
-    assert "Use the bundled workflow" not in catalog
+    assert "<name>internet-research</name>" in prompt
+    assert "<description>Research current sources.</description>" in prompt
+    assert "Use the bundled workflow" not in prompt
 
 
 def test_load_describes_binary_resources_without_reading_them(tmp_path: Path) -> None:

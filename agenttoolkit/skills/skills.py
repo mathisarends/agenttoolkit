@@ -49,7 +49,7 @@ class Skills:
             resources=tuple(self._resource_paths(skill)),
         )
 
-    def catalog(self) -> str:
+    def render_prompt(self) -> str:
         entries = "\n".join(
             (
                 "<skill>\n"

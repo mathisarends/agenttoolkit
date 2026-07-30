@@ -30,7 +30,7 @@ def main() -> None:
 
         # A short catalog an agent can see up front, before deciding to load
         # any particular skill's full instructions.
-        print(skills.catalog())
+        print(skills.render_prompt())
 
         # Full instructions plus paths to resources that can be read or executed
         # through the application's general filesystem and process tools.

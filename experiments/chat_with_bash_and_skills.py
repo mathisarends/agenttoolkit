@@ -23,7 +23,7 @@ def _system_prompt(skills: Skills) -> str:
         "When a request matches a skill, call load_skill before answering. "
         "Follow the loaded instructions and use Bash to read only the referenced "
         "resources or run the referenced scripts. Do not read SKILL.md with Bash.\n\n"
-        f"{skills.catalog()}"
+        f"{skills.render_prompt()}"
     )
 
 
