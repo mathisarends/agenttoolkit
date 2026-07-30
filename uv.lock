@@ -52,7 +52,7 @@ dev = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "ruff", specifier = ">=0.9" },
 ]
-py-llmify = [{ name = "py-llmify", extras = ["openai"] }]
+py-llmify = [{ name = "py-llmify", extras = ["openai"], specifier = "==0.9.0" }]
 
 [[package]]
 name = "annotated-types"
@@ -635,15 +635,15 @@ wheels = [
 
 [[package]]
 name = "py-llmify"
-version = "0.8.0"
+version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/b6/c2d324d79b9639a3159dee51dd196efc8dbf64d11d26e2a59b01ef6373a3/py_llmify-0.8.0.tar.gz", hash = "sha256:a96316e04e87d27a5bd26b70d683d4fd6c93ff0e3cbc7aa3f0b15e09aeb251fd", size = 36852, upload-time = "2026-07-27T05:42:12.88Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0c/71/cbee3f9e7ee6a2f5ca8cf6521ea1888007c35fea737c0edcf6cf30947266/py_llmify-0.9.0.tar.gz", hash = "sha256:0ac188e7cb4eacd9b2558d4c9946b995be78cc88686fe3ab48b85cf6f27e5bcf", size = 39961, upload-time = "2026-07-30T19:41:55.324Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/02/51f382c33af1dad434d0634501558a3f68db6d8dfcc9da7e4a08354efc34/py_llmify-0.8.0-py3-none-any.whl", hash = "sha256:232be493ab3a7f1b4b2f03e64c59862a90718f92d5f56af133fcd10d9f66d26b", size = 41804, upload-time = "2026-07-27T05:42:11.821Z" },
+    { url = "https://files.pythonhosted.org/packages/13/23/ac112908ce305aa5806c773a2e383498eef7ef72c0804317c26b0529601c/py_llmify-0.9.0-py3-none-any.whl", hash = "sha256:7119a655c6cb3fe2439c03c51d4aae57aa3a85f21e47aa70ed89748d9a15150e", size = 44729, upload-time = "2026-07-30T19:41:54.247Z" },
 ]
 
 [package.optional-dependencies]

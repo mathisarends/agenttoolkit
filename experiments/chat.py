@@ -117,7 +117,7 @@ def get_weather(city: str) -> WeatherActionResult:
 
 async def main() -> None:
     console = Console(tools, context=context)
-    model = ChatCodex.from_codex_cli(model="gpt-5.6-terra")
+    model = ChatCodex.from_cli(model="gpt-5.6-terra", on_retry=console.on_retry)
     agent = Agent(
         model,
         tools,

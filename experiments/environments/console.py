@@ -1,6 +1,8 @@
 import sys
 from typing import Any
 
+from llmify import RetryEvent
+
 from agenttoolkit.tools import ActionResult, Tool, ToolContext, Tools
 from experiments.agent import Agent
 
@@ -32,6 +34,12 @@ class Console:
             print(f"  <- {name}:\n{result.result}")
         else:
             print(f"  <- {name} FAILED:\n{result.error}")
+
+    def on_retry(self, event: RetryEvent) -> None:
+        print(
+            f"  .. retry {event.retry_number}/{event.max_retries} "
+            f"in {event.delay:.1f}s: {event.error}"
+        )
 
     def confirm(self, name: str, arguments: dict[str, Any]) -> bool:
         answer = input(f"  ?? approve '{name}({arguments})'? [y/N] ")
