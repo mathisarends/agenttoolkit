@@ -191,3 +191,16 @@ def test_load_rejects_skill_renamed_after_discovery(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="must match its parent directory"):
         skills.load("internet-research")
+
+
+def test_refresh_keeps_previous_registry_when_discovery_fails(
+    tmp_path: Path,
+) -> None:
+    make_skill(tmp_path)
+    skills = Skills.from_local_dir(tmp_path)
+    make_skill(tmp_path, name="broken", source="# Missing frontmatter")
+
+    with pytest.raises(ValueError, match="must start with YAML frontmatter"):
+        skills.refresh()
+
+    assert skills.names() == ["internet-research"]

@@ -13,8 +13,8 @@ class Skills:
     def __init__(self, paths: Sequence[str | Path]) -> None:
         if not paths:
             raise ValueError("At least one skills directory is required.")
-        self._skills: dict[str, Skill] = {}
-        self._discover(tuple(Path(path) for path in paths))
+        self._paths = tuple(Path(path).resolve() for path in paths)
+        self._skills = self._discover(self._paths)
 
     @classmethod
     def from_local_dir(cls, *paths: str | Path) -> Self:
@@ -30,6 +30,11 @@ class Skills:
 
     def names(self) -> list[str]:
         return list(self._skills)
+
+    def refresh(self) -> None:
+        """Refresh the registry from the configured skills directories."""
+        skills = self._discover(self._paths)
+        self._skills = skills
 
     def get(self, name: str) -> Skill:
         try:
@@ -78,9 +83,10 @@ class Skills:
             )
         return skill
 
-    def _discover(self, paths: tuple[Path, ...]) -> None:
+    def _discover(self, paths: tuple[Path, ...]) -> dict[str, Skill]:
+        skills: dict[str, Skill] = {}
         for configured_path in paths:
-            root = configured_path.resolve()
+            root = configured_path
             if not root.exists():
                 raise ValueError(f"Skills directory does not exist: {root}")
             if not root.is_dir():
@@ -97,7 +103,7 @@ class Skills:
                         f"root '{root}'."
                     )
                 skill = parse_skill(resolved_skill_file)
-                previous = self._skills.get(skill.name)
+                previous = skills.get(skill.name)
                 if previous is not None:
                     logger.warning(
                         "Skill '%s' from %s overrides skill from %s.",
@@ -105,7 +111,8 @@ class Skills:
                         skill.directory,
                         previous.directory,
                     )
-                self._skills[skill.name] = skill
+                skills[skill.name] = skill
+        return skills
 
     def _resource_paths(self, skill: Skill) -> list[str]:
         resources: list[str] = []

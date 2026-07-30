@@ -460,6 +460,9 @@ system_prompt = f"You are helpful.\n\n{skills.render_prompt()}"
 loaded = skills.load("internet-research")
 system_prompt += f"\n\n{loaded.instructions}"
 
+# Re-scan the configured directories after skills are added or removed.
+skills.refresh()
+
 # The application decides which general filesystem and process tools to expose.
 guide = read_file(loaded.directory / "references/guide.md")
 output = await run_process(
@@ -471,7 +474,9 @@ output = await run_process(
 `Skills.from_local_dir` accepts multiple directories; a skill discovered
 later overrides one with the same name from an earlier directory (logged as
 a warning). `SKILL.md` is re-parsed from disk on each `load`, so instructions
-can be edited without restarting the process.
+can be edited without restarting the process. `refresh()` rebuilds the registry
+from the configured directories, picking up added, changed, and removed skills.
+If discovery fails, the previous registry remains available.
 
 `load()` returns an immutable `LoadedSkill` containing `name`, `instructions`,
 the absolute skill `directory`, and sorted relative `resources`. Resource

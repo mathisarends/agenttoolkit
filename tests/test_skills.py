@@ -91,6 +91,40 @@ def test_invalid_skill_name_is_rejected(tmp_path: Path) -> None:
         Skills.from_local_dir(tmp_path)
 
 
+def test_refresh_registers_new_skills(tmp_path: Path) -> None:
+    make_skill(tmp_path)
+    skills = Skills.from_local_dir(tmp_path)
+    new_directory = make_skill(
+        tmp_path,
+        name="code-review",
+        description="Review code changes.",
+    )
+
+    skills.refresh()
+
+    assert skills.names() == ["code-review", "internet-research"]
+    assert skills.get("code-review").directory == new_directory.resolve()
+
+
+def test_refresh_rebuilds_registry_from_disk(tmp_path: Path) -> None:
+    directory = make_skill(tmp_path)
+    skills = Skills.from_local_dir(tmp_path)
+    (directory / "SKILL.md").write_text(
+        (
+            "---\n"
+            "name: internet-research\n"
+            "description: Updated description.\n"
+            "---\n"
+            "# Research\n\nUse the updated workflow.\n"
+        ),
+        encoding="utf-8",
+    )
+
+    skills.refresh()
+
+    assert skills.get("internet-research").description == "Updated description."
+
+
 def test_load_exposes_script_path_for_a_general_process_runner(
     tmp_path: Path,
 ) -> None:
