@@ -5,12 +5,17 @@ from pathlib import Path, PurePosixPath
 from llmify import ChatCodex
 
 from agenttoolkit import Skills
+from agenttoolkit.builtins.fs import LocalWorkspace
 from agenttoolkit.builtins.shell import BindMount
 from agenttoolkit.tools import ToolContext, Tools
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.sandboxing import connected_sandbox, experiment_workspace
-from experiments.tools import register_shell_tool, register_skill_loader
+from experiments.tools import (
+    register_file_tools,
+    register_shell_tool,
+    register_skill_loader,
+)
 
 SKILLS_DIR = Path(__file__).parent / "skills"
 CONTAINER_SKILLS_DIR = PurePosixPath("/skills")
@@ -44,18 +49,21 @@ async def main() -> None:
     args = parser.parse_args()
 
     skills = Skills.from_local_dir(SKILLS_DIR)
+    workspace = LocalWorkspace(experiment_workspace("connected"))
     sandbox = connected_sandbox(
-        experiment_workspace("connected"),
+        workspace.root,
         require_spogo=args.require_spogo,
         mounts=(BindMount.read_write(SKILLS_DIR, CONTAINER_SKILLS_DIR),),
     )
-    tools = Tools(context=ToolContext(sandbox, skills))
+    tools = Tools(context=ToolContext(sandbox, skills, workspace))
     register_skill_loader(tools, container_root=CONTAINER_SKILLS_DIR)
+    register_file_tools(tools)
     register_shell_tool(
         tools,
         description=(
-            "Run a Bash command in the connected-services sandbox. Skills can "
-            "be read and written under /skills."
+            "Run a Bash command in the connected-services sandbox. The shared "
+            "working directory is /workspace; skills can be read and written "
+            "under /skills."
         ),
     )
     console = Console(tools)
