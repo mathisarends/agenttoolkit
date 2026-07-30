@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit.builtins.fs import LocalWorkspace
-from agenttoolkit.tools import ActionResult, ToolContext, Tools
+from agenttoolkit.tools import ActionResult, ToolContext, ToolEffect, Tools
 from experiments.tools import register_file_tools
 
 
@@ -60,4 +60,8 @@ def test_file_tools_expose_expected_metadata() -> None:
     register_file_tools(tools)
 
     assert [tool.name for tool in tools] == ["read_file", "write_file", "edit_file"]
-    assert [tool.kind for tool in tools] == ["read", "write", "write"]
+    assert [tool.effects for tool in tools] == [
+        frozenset({ToolEffect.READS_WORKSPACE}),
+        frozenset({ToolEffect.WRITES_WORKSPACE}),
+        frozenset({ToolEffect.READS_WORKSPACE, ToolEffect.WRITES_WORKSPACE}),
+    ]

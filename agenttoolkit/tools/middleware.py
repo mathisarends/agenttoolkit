@@ -6,11 +6,14 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from agenttoolkit.skills import Skills
 from agenttoolkit.tools.context import ToolContext
+from agenttoolkit.tools.models import Tool, ToolEffect
 from agenttoolkit.tools.results import ActionResult
-from agenttoolkit.tools.tool import Tool
 
 logger = logging.getLogger(__name__)
+
+type ToolPredicate = Callable[[Tool], bool]
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +117,41 @@ class CallLoggingMiddleware(ToolMiddleware):
         return result
 
 
+def _writes_workspace(tool: Tool) -> bool:
+    return tool.has_effect(ToolEffect.WRITES_WORKSPACE)
+
+
+class SkillRefreshMiddleware(ToolMiddleware):
+    """Refresh changed skills after tools that may write skill documents."""
+
+    def __init__(
+        self,
+        skills: Skills,
+        *,
+        when: ToolPredicate = _writes_workspace,
+    ) -> None:
+        self._skills = skills
+        self._when = when
+
+    async def __call__(
+        self,
+        call: ToolCall,
+        next: ToolHandler,
+    ) -> ActionResult[object]:
+        result = await next(call)
+        if call.tool is None or not self._when(call.tool):
+            return result
+
+        try:
+            self._skills.refresh_if_changed()
+        except ValueError:
+            logger.exception(
+                "Skill refresh failed after tool '%s'; keeping the active registry.",
+                call.name,
+            )
+        return result
+
+
 def compose(
     middlewares: Sequence[ToolMiddleware],
     handler: ToolHandler,
@@ -128,15 +166,15 @@ def default_chain(
     result_type: type[ActionResult[object]],
     inner: Sequence[ToolMiddleware] | None = None,
 ) -> tuple[ToolMiddleware, ...]:
-    core = (
+    """Custom middleware runs inside the core so that `call.tool` and
+    `call.params` are already populated — filtering on tool metadata is only
+    possible after resolution.
+    """
+    return (
         ErrorBoundaryMiddleware(result_type),
         ToolResolutionMiddleware(tools, result_type),
         ParamValidationMiddleware(result_type),
-    )
-    if inner is not None:
-        return (*inner, *core)
-    return (
-        *core,
+        *(inner or ()),
         CallLoggingMiddleware(),
     )
 

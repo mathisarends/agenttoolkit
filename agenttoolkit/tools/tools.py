@@ -12,14 +12,15 @@ from agenttoolkit.tools.middleware import (
     compose,
     default_chain,
 )
-from agenttoolkit.tools.results import ActionResult
-from agenttoolkit.tools.schema import ToolSchema
-from agenttoolkit.tools.tool import (
+from agenttoolkit.tools.models import (
     StatusFormatter,
     Tool,
+    ToolEffect,
     ToolMetadata,
     ToolSchemaFormat,
 )
+from agenttoolkit.tools.results import ActionResult
+from agenttoolkit.tools.schema import ToolSchema
 
 
 class Tools:
@@ -45,7 +46,7 @@ class Tools:
         *,
         params: type[ParamsT] | None = None,
         status: StatusFormatter[ParamsT] | None = None,
-        kind: str = "generic",
+        effects: Iterable[ToolEffect] = (),
         requires_approval: bool = False,
         available_when: ToolAvailability | None = None,
         tags: Sequence[str] = (),
@@ -60,7 +61,7 @@ class Tools:
                     fn=func,
                     param_model=params,
                     metadata=ToolMetadata(
-                        kind=kind,
+                        effects=frozenset(effects),
                         status=status,
                         tags=frozenset(tags),
                         extra=metadata or {},

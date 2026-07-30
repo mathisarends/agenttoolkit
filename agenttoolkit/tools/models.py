@@ -21,6 +21,17 @@ class ToolSchemaFormat(StrEnum):
     ANTHROPIC = "anthropic"
 
 
+class ToolEffect(StrEnum):
+    """What a call does to the world, declared so hosts can react to behaviour
+    instead of to tool names, which are part of the model-facing API and change.
+    """
+
+    READS_WORKSPACE = "reads_workspace"
+    WRITES_WORKSPACE = "writes_workspace"
+    NETWORK = "network"
+    SPAWNS_PROCESS = "spawns_process"
+
+
 type StatusFormatter[ParamsT: BaseModel] = str | Callable[[ParamsT], str]
 
 
@@ -28,12 +39,17 @@ type StatusFormatter[ParamsT: BaseModel] = str | Callable[[ParamsT], str]
 class ToolMetadata:
     """Runtime hints which do not belong in an LLM function schema."""
 
-    kind: str = "generic"
+    effects: frozenset[ToolEffect] = field(default_factory=frozenset)
     status: StatusFormatter[Any] | None = None
     tags: frozenset[str] = field(default_factory=frozenset)
     extra: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "effects",
+            frozenset(ToolEffect(effect) for effect in self.effects),
+        )
         object.__setattr__(self, "tags", frozenset(self.tags))
         object.__setattr__(self, "extra", MappingProxyType(dict(self.extra)))
 
@@ -69,8 +85,11 @@ class Tool:
         self._validate_status()
 
     @property
-    def kind(self) -> str:
-        return self._metadata.kind
+    def effects(self) -> frozenset[ToolEffect]:
+        return self._metadata.effects
+
+    def has_effect(self, effect: ToolEffect) -> bool:
+        return effect in self._metadata.effects
 
     @property
     def status(self) -> StatusFormatter[Any] | None:

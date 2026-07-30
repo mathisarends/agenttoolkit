@@ -15,8 +15,8 @@ class TimingMiddleware(ToolMiddleware):
         return result
 
 
-# Custom middleware runs outermost, ahead of the built-in error boundary,
-# resolution and validation middlewares, wrapping the whole call.
+# Custom middleware runs inside the built-in error boundary, resolution and
+# validation middlewares, so call.tool and call.params are already populated.
 tools = Tools(middleware=[TimingMiddleware()])
 
 

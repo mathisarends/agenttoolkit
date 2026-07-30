@@ -29,7 +29,7 @@ it is a building block, not a framework.
 
 - Registration through a `@tools.action` decorator — no hand-written JSON
   Schema, for either plain function signatures or Pydantic models.
-- Runtime metadata (`kind`, `status`, `tags`, custom fields) and an
+- Runtime metadata (`effects`, `status`, `tags`, custom fields) and an
   `requires_approval` flag, kept out of the model-facing schema but readable
   by the host loop that dispatches calls.
 - Context-based dependency injection (`Inject[T]`) so tools can receive
@@ -130,7 +130,7 @@ class RefundParams(BaseModel):
 @tools.action(
     "Issue a refund for an order.",
     params=RefundParams,
-    kind="write",
+    effects=(ToolEffect.NETWORK,),
     status=lambda params: (
         f"Refunding {params.amount} for order {params.order_id}..."
     ),
@@ -143,12 +143,16 @@ def refund(params: RefundParams, client: Inject[BillingClient]) -> str:
     return "refunded"
 ```
 
-None of `kind`, `status`, `tags`, `requires_approval`, or `metadata` are
+None of `effects`, `status`, `tags`, `requires_approval`, or `metadata` are
 visible to the model — they never appear in the generated JSON Schema. They
 exist for the host loop that dispatches the call:
 
-- `kind` — a free-form category (e.g. `"read"`, `"write"`), readable as
-  `tool.kind`.
+- `effects` — a `frozenset[ToolEffect]` declaring what a call does to the
+  world (`READS_WORKSPACE`, `WRITES_WORKSPACE`, `NETWORK`,
+  `SPAWNS_PROCESS`), readable as `tool.effects` or via
+  `tool.has_effect(...)`. Effects let middleware and host policies react to
+  behaviour rather than to tool names, which are part of the model-facing
+  API and change over time.
 - `status` — a human-readable status message, either a `str.format`
   template referencing parameter names or a callable. For callables, the
   parameter type is inferred from `params`, providing type checking and IDE
@@ -164,7 +168,7 @@ exist for the host loop that dispatches the call:
 
 ```python
 tool = tools.get("refund")
-tool.kind               # "write"
+tool.effects             # frozenset({ToolEffect.NETWORK})
 tool.tags                # frozenset({"billing", "write"})
 tool.extra["owner"]      # "billing-team"
 tool.requires_approval   # True
@@ -267,7 +271,7 @@ else:
 `Tools.get_available()` returns the underlying `Tool` objects for the active
 registry context instead of schemas — handy for printing a catalog of what's
 currently exposed (`tool.name`, `tool.resolve_description(context)`,
-`tool.kind`, ...).
+`tool.effects`, ...).
 
 ## Results (`ActionResult`)
 
@@ -329,8 +333,8 @@ tools = Tools(result_type=ProjectActionResult[object])
 ## Middleware
 
 Every call passes through a fixed core — error boundary, tool resolution,
-argument validation — plus logging by default. Pass `middleware=` to run
-additional steps *before* that core, e.g. a timeout:
+argument validation — followed by call logging. Pass `middleware=` to run
+additional steps between the core and logging, e.g. a timeout:
 
 ```python
 from agenttoolkit import ToolCall, ToolMiddleware
@@ -347,8 +351,9 @@ class TimeoutMiddleware(ToolMiddleware):
 tools = Tools(middleware=[TimeoutMiddleware(5.0)])
 ```
 
-Supplying `middleware=` replaces the default logging step; add your own
-logging middleware to the list if you still want it.
+Custom middleware runs *after* resolution and validation, so `call.tool` and
+`call.params` are already populated — which is what makes filtering on tool
+metadata (see `effects` above) possible.
 
 ## Merging registries
 
@@ -484,25 +489,24 @@ revision and the added, updated, and removed skill names. `refresh_if_changed()`
 first compares a lightweight fingerprint of the `SKILL.md` paths, modification
 times, and sizes, avoiding parsing when no skill document changed.
 
-Agents that can write their own skills can attach `SkillRefreshMiddleware` to
-the tools that may mutate skill documents. The middleware refreshes the
-registry silently after those calls and leaves their results unchanged:
+Agents that can write their own skills can attach `SkillRefreshMiddleware`.
+By default it refreshes the registry after every tool that declares
+`ToolEffect.WRITES_WORKSPACE`, silently and without touching the tool's own
+result — so a newly added write tool is covered as soon as it declares its
+effect, with no list of tool names to keep in sync:
 
 ```python
 from agenttoolkit import SkillRefreshMiddleware
-from agenttoolkit.tools.middleware import CallLoggingMiddleware
 
 tools = Tools(
     context=ToolContext(skills),
-    middleware=[
-        SkillRefreshMiddleware(skills, watched_tools={"bash", "save_skill"}),
-        CallLoggingMiddleware(),
-    ],
+    middleware=[SkillRefreshMiddleware(skills)],
 )
 ```
 
-Supplying custom middleware replaces default call logging, so the example adds
-`CallLoggingMiddleware` explicitly. Invalid skill edits are not activated and
+Pass `when=` to select tools by any other predicate over the `Tool`, e.g.
+`SkillRefreshMiddleware(skills, when=lambda tool: "skills" in tool.tags)`.
+Invalid skill edits are not activated and
 the previous registry remains available. Applications that embed
 `skills.render_prompt()` in model context should render that dynamic portion
 again before each model invocation.

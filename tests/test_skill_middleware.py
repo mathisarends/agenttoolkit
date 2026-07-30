@@ -3,7 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from agenttoolkit import ActionResult, SkillRefreshMiddleware, Skills, Tools
+from agenttoolkit import (
+    ActionResult,
+    SkillRefreshMiddleware,
+    Skills,
+    ToolEffect,
+    Tools,
+)
 
 
 def skill_source(
@@ -31,16 +37,12 @@ def make_skill(root: Path, name: str = "existing") -> Path:
 
 
 @pytest.mark.asyncio
-async def test_watched_tool_refreshes_and_returns_new_catalog(tmp_path: Path) -> None:
+async def test_writing_tool_refreshes_and_returns_new_catalog(tmp_path: Path) -> None:
     make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(
-        middleware=[
-            SkillRefreshMiddleware(skills, watched_tools={"write_skill"}),
-        ]
-    )
+    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
 
-    @tools.action("Write a skill")
+    @tools.action("Write a skill", effects=(ToolEffect.WRITES_WORKSPACE,))
     def write_skill() -> str:
         make_skill(tmp_path, "created")
         return "written"
@@ -53,16 +55,14 @@ async def test_watched_tool_refreshes_and_returns_new_catalog(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_unwatched_tool_does_not_refresh_registry(tmp_path: Path) -> None:
+async def test_tool_without_write_effect_does_not_refresh_registry(
+    tmp_path: Path,
+) -> None:
     make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(
-        middleware=[
-            SkillRefreshMiddleware(skills, watched_tools={"write_skill"}),
-        ]
-    )
+    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
 
-    @tools.action("Write without refresh")
+    @tools.action("Write without declaring the effect")
     def other_tool() -> str:
         make_skill(tmp_path, "created")
         return "written"
@@ -74,19 +74,36 @@ async def test_unwatched_tool_does_not_refresh_registry(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_custom_predicate_selects_tools(tmp_path: Path) -> None:
+    make_skill(tmp_path)
+    skills = Skills.from_local_dir(tmp_path)
+    tools = Tools(
+        middleware=[
+            SkillRefreshMiddleware(skills, when=lambda tool: "skills" in tool.tags),
+        ]
+    )
+
+    @tools.action("Write a skill", tags=["skills"])
+    def write_skill() -> str:
+        make_skill(tmp_path, "created")
+        return "written"
+
+    result = await tools.execute("write_skill")
+
+    assert result == ActionResult.success("written")
+    assert skills.names() == ["created", "existing"]
+
+
+@pytest.mark.asyncio
 async def test_invalid_edit_reports_error_and_keeps_active_registry(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     directory = make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(
-        middleware=[
-            SkillRefreshMiddleware(skills, watched_tools={"write_skill"}),
-        ]
-    )
+    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
 
-    @tools.action("Write an invalid skill")
+    @tools.action("Write an invalid skill", effects=(ToolEffect.WRITES_WORKSPACE,))
     def write_skill() -> str:
         (directory / "SKILL.md").write_text(
             "# Missing frontmatter",
@@ -105,18 +122,14 @@ async def test_invalid_edit_reports_error_and_keeps_active_registry(
 
 
 @pytest.mark.asyncio
-async def test_failed_watched_tool_still_reports_catalog_update(
+async def test_failed_writing_tool_still_reports_catalog_update(
     tmp_path: Path,
 ) -> None:
     make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(
-        middleware=[
-            SkillRefreshMiddleware(skills, watched_tools={"write_skill"}),
-        ]
-    )
+    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
 
-    @tools.action("Write and fail")
+    @tools.action("Write and fail", effects=(ToolEffect.WRITES_WORKSPACE,))
     def write_skill() -> ActionResult:
         make_skill(tmp_path, "created")
         return ActionResult.fail("command failed")
@@ -125,11 +138,3 @@ async def test_failed_watched_tool_still_reports_catalog_update(
 
     assert result == ActionResult.fail("command failed")
     assert skills.names() == ["created", "existing"]
-
-
-def test_skill_refresh_middleware_requires_watched_tools(tmp_path: Path) -> None:
-    make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
-
-    with pytest.raises(ValueError, match="At least one watched tool"):
-        SkillRefreshMiddleware(skills, watched_tools=())

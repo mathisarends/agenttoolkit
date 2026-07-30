@@ -144,7 +144,7 @@ async def test_custom_middleware_wraps_execution() -> None:
     result = await tools.execute("double", {"value": "3"})
 
     assert result == ActionResult[int].success(6)
-    assert events[0] == "before:None"
+    assert events[0] == "before:3"
     assert events[1] == "after:6"
 
 

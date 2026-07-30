@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from agenttoolkit.tools.models import Tool, ToolEffect, ToolMetadata
 from agenttoolkit.tools.results import ActionResult
-from agenttoolkit.tools.tool import Tool, ToolMetadata
 from agenttoolkit.tools.tools import Tools
 
 
@@ -31,7 +31,7 @@ class MCPToolPage:
 @dataclass(frozen=True, slots=True)
 class MCPToolRegistration:
     name: str | None = None
-    kind: str = "generic"
+    effects: tuple[ToolEffect, ...] = ()
     requires_approval: bool = False
     tags: tuple[str, ...] = ("mcp",)
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -138,7 +138,7 @@ def _adapt_tool(
         param_model=_MCPArguments,
         parameters=definition.input_schema,
         metadata=ToolMetadata(
-            kind=registration.kind,
+            effects=frozenset(registration.effects),
             tags=frozenset(registration.tags),
             extra={
                 **dict(registration.metadata),

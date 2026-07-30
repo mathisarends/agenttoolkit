@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from agenttoolkit.builtins.shell import Sandbox
-from agenttoolkit.tools import ActionResult, Inject, Tools
+from agenttoolkit.tools import ActionResult, Inject, ToolEffect, Tools
 
 
 class ShellParams(BaseModel):
@@ -20,6 +20,11 @@ def register_shell_tool(
         name=name,
         params=ShellParams,
         status=lambda params: f"Running: {params.command}",
+        effects=(
+            ToolEffect.SPAWNS_PROCESS,
+            ToolEffect.READS_WORKSPACE,
+            ToolEffect.WRITES_WORKSPACE,
+        ),
         requires_approval=requires_approval,
     )
     async def run_shell(

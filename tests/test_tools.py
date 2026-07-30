@@ -8,6 +8,7 @@ from agenttoolkit import (
     ActionResult,
     Inject,
     ToolContext,
+    ToolEffect,
     Tools,
     ToolSchemaFormat,
     description_from_context,
@@ -33,7 +34,7 @@ async def test_register_validate_inject_and_execute() -> None:
     @tools.action(
         "Search",
         params=SearchParams,
-        kind="read",
+        effects=(ToolEffect.NETWORK,),
         tags=["network"],
         metadata={"owner": "knowledge"},
     )
@@ -48,7 +49,8 @@ async def test_register_validate_inject_and_execute() -> None:
 
     assert result == ActionResult.success("found:docs:10")
     assert tool is not None
-    assert tool.kind == "read"
+    assert tool.effects == frozenset({ToolEffect.NETWORK})
+    assert tool.has_effect(ToolEffect.NETWORK)
     assert tool.tags == frozenset({"network"})
     assert tool.extra["owner"] == "knowledge"
 

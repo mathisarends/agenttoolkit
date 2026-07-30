@@ -8,7 +8,7 @@ import pytest
 from mcp_types import CallToolResult, ListToolsResult, TextContent
 from mcp_types import Tool as MCPTool
 
-from agenttoolkit import Tools
+from agenttoolkit import ToolEffect, Tools
 from agenttoolkit.mcp import (
     MCPClient,
     MCPServerClient,
@@ -81,7 +81,7 @@ async def test_abc_registers_paginated_and_configured_tools() -> None:
         configure=lambda definition: (
             MCPToolRegistration(
                 name="forecast",
-                kind="weather",
+                effects=(ToolEffect.NETWORK,),
                 tags=("remote",),
                 metadata={"owner": "agent"},
             )
@@ -93,7 +93,7 @@ async def test_abc_registers_paginated_and_configured_tools() -> None:
 
     assert client.cursors == [None, "next"]
     assert [tool.name for tool in registered] == ["mcp_forecast"]
-    assert registered[0].kind == "weather"
+    assert registered[0].effects == frozenset({ToolEffect.NETWORK})
     assert registered[0].tags == frozenset({"remote"})
     assert registered[0].extra == {
         "owner": "agent",
