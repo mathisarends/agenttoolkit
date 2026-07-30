@@ -25,7 +25,7 @@ CONTAINER_SKILLS_DIR = PurePosixPath("/skills")
 def _system_prompt(skills: Skills) -> str:
     return (
         "You control connected home services through Bash in an isolated "
-        "container. The installed CLIs are hueify, sonos, and spogo. "
+        "container. The installed CLIs are openhue, sonos, and spogo. "
         "Inspect their help when unsure. Never print credentials or config "
         "files, and prefer read-only status commands unless the user "
         "explicitly asks you to change something.\n\n"
@@ -85,7 +85,7 @@ async def main() -> None:
         agent,
         (
             "Connected chat gestartet "
-            f"[hueify, sonos, spogo; Skills: {', '.join(skills.names())}]. "
+            f"[openhue, sonos, spogo; Skills: {', '.join(skills.names())}]. "
             "'exit' zum Beenden."
         ),
     )

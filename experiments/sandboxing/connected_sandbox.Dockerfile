@@ -27,11 +27,12 @@ FROM python:3.14-alpine
 ENV SPOGO_CONFIG=/workspace/.spogo/container.toml
 
 RUN apk add --no-cache bash curl
-RUN pip install --no-cache-dir "hueify[cli]" "pyyaml>=6.0.3"
 
 COPY --from=cli /go/bin/sonos /usr/local/bin/sonos
 COPY --from=cli /go/bin/spogo /usr/local/bin/spogo
-COPY --from=cli /go/bin/openhue /usr/local/bin/openhue
+COPY --from=cli /go/bin/openhue /usr/local/libexec/openhue
+COPY experiments/sandboxing/openhue-env /usr/local/bin/openhue
+RUN chmod +x /usr/local/bin/openhue
 
 ENTRYPOINT []
 CMD ["bash"]
