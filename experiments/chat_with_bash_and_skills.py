@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import logging
 from pathlib import Path, PurePosixPath
 
 from llmify import ChatCodex
@@ -14,6 +15,8 @@ from experiments.tools import register_shell_tool, register_skill_loader
 
 SKILLS_DIR = Path(__file__).parent / "skills"
 CONTAINER_SKILLS_DIR = PurePosixPath("/skills")
+
+logger = logging.getLogger(__name__)
 
 
 def _system_prompt(skills: Skills) -> str:

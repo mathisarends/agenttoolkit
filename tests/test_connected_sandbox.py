@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from agenttoolkit.builtins.shell import BindMount
 from experiments.sandboxing import connected_sandbox
 
 _CONNECTED_ENVIRONMENT = (
@@ -45,3 +46,30 @@ def test_connected_sandbox_uses_host_network(
     assert ("--network", "host") == argv[
         argv.index("--network") : argv.index("--network") + 2
     ]
+
+
+def test_connected_sandbox_accepts_writable_mounts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SPOGO_CONFIG_DIR", str(tmp_path / "spogo"))
+    for name in _CONNECTED_ENVIRONMENT:
+        monkeypatch.setenv(name, "configured")
+    skills = tmp_path / "skills"
+    skills.mkdir()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    sandbox = connected_sandbox(
+        workspace,
+        mounts=(BindMount.read_write(skills, "/skills"),),
+    )
+
+    assert sandbox.mounts == (BindMount.read_write(skills, "/skills"),)
+    argv = sandbox.build_argv("touch /skills/new-skill")
+    specification = next(
+        argv[index + 1]
+        for index, argument in enumerate(argv)
+        if argument == "--mount" and "dst=/skills" in argv[index + 1]
+    )
+    assert "readonly" not in specification

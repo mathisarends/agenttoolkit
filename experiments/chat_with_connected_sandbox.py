@@ -1,13 +1,37 @@
 import argparse
 import asyncio
+from pathlib import Path, PurePosixPath
 
 from llmify import ChatCodex
 
+from agenttoolkit import Skills
+from agenttoolkit.builtins.shell import BindMount
 from agenttoolkit.tools import ToolContext, Tools
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.sandboxing import connected_sandbox, experiment_workspace
-from experiments.tools import register_shell_tool
+from experiments.tools import register_shell_tool, register_skill_loader
+
+SKILLS_DIR = Path(__file__).parent / "skills"
+CONTAINER_SKILLS_DIR = PurePosixPath("/skills")
+
+
+def _system_prompt(skills: Skills) -> str:
+    return (
+        "You control connected home services through Bash in an isolated "
+        "container. The installed CLIs are hueify, sonos, and spogo. "
+        "Inspect their help when unsure. Never print credentials or config "
+        "files, and prefer read-only status commands unless the user "
+        "explicitly asks you to change something.\n\n"
+        "You also have progressively disclosed skills. The catalog below "
+        "contains only skill names and descriptions. When a request matches a "
+        "skill, call load_skill before acting and follow its instructions. "
+        "Skill files are writable under /skills. When the user asks you to "
+        "capture a reusable workflow, load skill-creator and create or update "
+        "the skill there. Inspect an existing skill before changing it. New "
+        "skill names enter the catalog after this chat is restarted.\n\n"
+        f"{skills.render_prompt()}"
+    )
 
 
 async def main() -> None:
@@ -19,33 +43,37 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
+    skills = Skills.from_local_dir(SKILLS_DIR)
     sandbox = connected_sandbox(
         experiment_workspace("connected"),
         require_spogo=args.require_spogo,
+        mounts=(BindMount.read_write(SKILLS_DIR, CONTAINER_SKILLS_DIR),),
     )
-    tools = Tools(context=ToolContext(sandbox))
+    tools = Tools(context=ToolContext(sandbox, skills))
+    register_skill_loader(tools, container_root=CONTAINER_SKILLS_DIR)
     register_shell_tool(
         tools,
-        description="Run a Bash command in the connected-services sandbox.",
+        description=(
+            "Run a Bash command in the connected-services sandbox. Skills can "
+            "be read and written under /skills."
+        ),
     )
     console = Console(tools)
     agent = Agent(
         ChatCodex.from_codex_cli(model="gpt-5.6-terra"),
         tools,
-        system_prompt=(
-            "You control connected home services through Bash in an isolated "
-            "container. The installed CLIs are hueify, sonos, and spogo. "
-            "Inspect their help when unsure. Never print credentials or config "
-            "files, and prefer read-only status commands unless the user "
-            "explicitly asks you to change something."
-        ),
+        system_prompt=_system_prompt(skills),
         on_tool_call=console.on_tool_call,
         on_tool_result=console.on_tool_result,
     )
 
     await console.run(
         agent,
-        "Connected chat gestartet [hueify, sonos, spogo]. 'exit' zum Beenden.",
+        (
+            "Connected chat gestartet "
+            f"[hueify, sonos, spogo; Skills: {', '.join(skills.names())}]. "
+            "'exit' zum Beenden."
+        ),
     )
 
 

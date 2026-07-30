@@ -1,5 +1,6 @@
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,14 +29,15 @@ def connected_sandbox(
     workspace: Path,
     *,
     require_spogo: bool = False,
+    mounts: Sequence[BindMount] = (),
 ) -> DockerSandbox:
     spogo_config = _spogo_config_directory() / "config.toml"
-    mounts = (
+    spogo_mounts = (
         (BindMount.read_write(spogo_config.parent, _SPOGO_CONTAINER_DIR),)
         if spogo_config.is_file()
         else ()
     )
-    if require_spogo and not mounts:
+    if require_spogo and not spogo_mounts:
         raise RuntimeError(
             f"Spogo is not authenticated: expected {spogo_config}. "
             "Run `spogo auth import` or `spogo auth paste` on the host first."
@@ -48,7 +50,7 @@ def connected_sandbox(
             writable=True,
             enable_network_access=True,
         ),
-        mounts=mounts,
+        mounts=(*mounts, *spogo_mounts),
         inherit_environment=_CONNECTED_ENVIRONMENT,
         user="host",
         network_mode=DockerNetworkMode.HOST,
