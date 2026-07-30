@@ -1,4 +1,11 @@
-from .skills import LoadedSkill, Skill, Skills, parse_skill
+from .skills import (
+    LoadedSkill,
+    Skill,
+    SkillChanges,
+    SkillRefreshMiddleware,
+    Skills,
+    parse_skill,
+)
 from .tools import (
     ActionResult,
     Inject,
@@ -23,6 +30,8 @@ __all__ = [
     "Inject",
     "LoadedSkill",
     "Skill",
+    "SkillChanges",
+    "SkillRefreshMiddleware",
     "Skills",
     "Tool",
     "ToolAvailability",

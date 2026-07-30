@@ -36,6 +36,18 @@ class LoadedSkill:
     resources: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class SkillChanges:
+    revision: int
+    added: tuple[str, ...] = ()
+    updated: tuple[str, ...] = ()
+    removed: tuple[str, ...] = ()
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.added or self.updated or self.removed)
+
+
 def parse_skill(path: str | Path) -> Skill:
     resolved_path = Path(path).resolve()
     try:

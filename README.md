@@ -461,7 +461,8 @@ loaded = skills.load("internet-research")
 system_prompt += f"\n\n{loaded.instructions}"
 
 # Re-scan the configured directories after skills are added or removed.
-skills.refresh()
+changes = skills.refresh()
+print(changes.added, changes.updated, changes.removed)
 
 # The application decides which general filesystem and process tools to expose.
 guide = read_file(loaded.directory / "references/guide.md")
@@ -477,6 +478,34 @@ a warning). `SKILL.md` is re-parsed from disk on each `load`, so instructions
 can be edited without restarting the process. `refresh()` rebuilds the registry
 from the configured directories, picking up added, changed, and removed skills.
 If discovery fails, the previous registry remains available.
+
+`refresh()` returns an immutable `SkillChanges` value containing the registry
+revision and the added, updated, and removed skill names. `refresh_if_changed()`
+first compares a lightweight fingerprint of the `SKILL.md` paths, modification
+times, and sizes, avoiding parsing when no skill document changed.
+
+Agents that can write their own skills can attach `SkillRefreshMiddleware` to
+the tools that may mutate skill documents. The middleware refreshes the
+registry silently after those calls and leaves their results unchanged:
+
+```python
+from agenttoolkit import SkillRefreshMiddleware
+from agenttoolkit.tools.middleware import CallLoggingMiddleware
+
+tools = Tools(
+    context=ToolContext(skills),
+    middleware=[
+        SkillRefreshMiddleware(skills, watched_tools={"bash", "save_skill"}),
+        CallLoggingMiddleware(),
+    ],
+)
+```
+
+Supplying custom middleware replaces default call logging, so the example adds
+`CallLoggingMiddleware` explicitly. Invalid skill edits are not activated and
+the previous registry remains available. Applications that embed
+`skills.render_prompt()` in model context should render that dynamic portion
+again before each model invocation.
 
 `load()` returns an immutable `LoadedSkill` containing `name`, `instructions`,
 the absolute skill `directory`, and sorted relative `resources`. Resource

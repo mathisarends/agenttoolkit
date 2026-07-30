@@ -4,10 +4,11 @@ from pathlib import Path, PurePosixPath
 
 from llmify import ChatCodex
 
-from agenttoolkit import Skills
+from agenttoolkit import SkillRefreshMiddleware, Skills
 from agenttoolkit.builtins.fs import LocalWorkspace
 from agenttoolkit.builtins.shell import BindMount
 from agenttoolkit.tools import ToolContext, Tools
+from agenttoolkit.tools.middleware import CallLoggingMiddleware
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.sandboxing import connected_sandbox, experiment_workspace
@@ -33,8 +34,7 @@ def _system_prompt(skills: Skills) -> str:
         "skill, call load_skill before acting and follow its instructions. "
         "Skill files are writable under /skills. When the user asks you to "
         "capture a reusable workflow, load skill-creator and create or update "
-        "the skill there. Inspect an existing skill before changing it. New "
-        "skill names enter the catalog after this chat is restarted.\n\n"
+        "the skill there. Inspect an existing skill before changing it.\n\n"
         f"{skills.render_prompt()}"
     )
 
@@ -55,7 +55,13 @@ async def main() -> None:
         require_spogo=args.require_spogo,
         mounts=(BindMount.read_write(SKILLS_DIR, CONTAINER_SKILLS_DIR),),
     )
-    tools = Tools(context=ToolContext(sandbox, skills, workspace))
+    tools = Tools(
+        context=ToolContext(sandbox, skills, workspace),
+        middleware=[
+            SkillRefreshMiddleware(skills, watched_tools={"bash"}),
+            CallLoggingMiddleware(),
+        ],
+    )
     register_skill_loader(tools, container_root=CONTAINER_SKILLS_DIR)
     register_file_tools(tools)
     register_shell_tool(
@@ -70,7 +76,7 @@ async def main() -> None:
     agent = Agent(
         ChatCodex.from_codex_cli(model="gpt-5.6-sol"),
         tools,
-        system_prompt=_system_prompt(skills),
+        system_prompt=lambda: _system_prompt(skills),
         on_tool_call=console.on_tool_call,
         on_tool_result=console.on_tool_result,
     )

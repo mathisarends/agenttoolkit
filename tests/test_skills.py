@@ -100,10 +100,14 @@ def test_refresh_registers_new_skills(tmp_path: Path) -> None:
         description="Review code changes.",
     )
 
-    skills.refresh()
+    changes = skills.refresh()
 
     assert skills.names() == ["code-review", "internet-research"]
     assert skills.get("code-review").directory == new_directory.resolve()
+    assert changes.revision == 1
+    assert changes.added == ("code-review",)
+    assert changes.updated == ()
+    assert changes.removed == ()
 
 
 def test_refresh_rebuilds_registry_from_disk(tmp_path: Path) -> None:
@@ -120,9 +124,21 @@ def test_refresh_rebuilds_registry_from_disk(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    skills.refresh()
+    changes = skills.refresh()
 
     assert skills.get("internet-research").description == "Updated description."
+    assert changes.revision == 1
+    assert changes.updated == ("internet-research",)
+
+
+def test_refresh_if_changed_skips_unchanged_documents(tmp_path: Path) -> None:
+    make_skill(tmp_path)
+    skills = Skills.from_local_dir(tmp_path)
+
+    changes = skills.refresh_if_changed()
+
+    assert not changes.changed
+    assert changes.revision == 0
 
 
 def test_load_exposes_script_path_for_a_general_process_runner(

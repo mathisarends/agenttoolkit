@@ -7,11 +7,15 @@ description: Control Philips Hue lights, rooms, and zones with the hueify CLI, i
 
 `hueify` controls Philips Hue resources through these groups:
 
-| Group | Scope | Scenes |
-|---|---|---|
-| `lights` | One named bulb | No |
-| `rooms` | All lights in one room | Yes |
-| `zones` | All lights in one zone | Yes |
+| Group    | Scope                  | Scenes |
+| -------- | ---------------------- | ------ |
+| `lights` | One named bulb         | No     |
+| `rooms`  | All lights in one room | Yes    |
+| `zones`  | All lights in one zone | Yes    |
+
+## User preference: operate on rooms
+
+Prefer controlling the entire room with `hueify rooms` instead of switching individual bulbs with `hueify lights`. Treat the room as one coherent lighting unit for power, brightness, temperature, and scenes. Use an individual light only when the user explicitly names or requests a single bulb, or when the requested operation cannot be performed at room level. Prefer a zone only when the user explicitly refers to that zone or its scope is clearly intended.
 
 ## Authentication and setup
 

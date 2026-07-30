@@ -31,7 +31,7 @@ class Agent:
         model: ChatModel,
         tools: Tools,
         *,
-        system_prompt: str | None = None,
+        system_prompt: str | Callable[[], str] | None = None,
         on_tool_call: OnToolCall | None = None,
         on_tool_result: OnToolResult | None = None,
         confirm: Callable[[str, dict[str, Any]], bool] | None = None,
@@ -42,15 +42,27 @@ class Agent:
         self._on_tool_call = on_tool_call
         self._on_tool_result = on_tool_result
         self._confirm = confirm
-        if system_prompt:
+        self._system_prompt: Callable[[], str] | None
+        if isinstance(system_prompt, str):
+            self._system_prompt = None
             self._messages.append(SystemMessage(content=system_prompt))
+        else:
+            self._system_prompt = system_prompt
 
     async def run(self, user_input: str) -> str:
         self._messages.append(UserMessage(content=user_input))
 
         while True:
             schema = self._tools.get_schema(ToolSchemaFormat.OPENAI)
-            completion = await self._model.invoke(self._messages, tools=schema)
+            messages = (
+                [
+                    SystemMessage(content=self._system_prompt()),
+                    *self._messages,
+                ]
+                if self._system_prompt is not None
+                else self._messages
+            )
+            completion = await self._model.invoke(messages, tools=schema)
 
             self._messages.append(
                 AssistantMessage(
