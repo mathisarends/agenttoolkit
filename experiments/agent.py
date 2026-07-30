@@ -51,7 +51,19 @@ class Agent:
 
     async def run(self, user_input: str) -> str:
         self._messages.append(UserMessage(content=user_input))
+        return await self._loop()
 
+    async def resume(self) -> str:
+        """Continue after a failed turn without re-appending the user message.
+
+        Every point where `_loop` can raise leaves the history in a state the
+        provider accepts again (ending in a user message or in tool results),
+        so a transient provider error can be retried from here instead of
+        discarding the conversation.
+        """
+        return await self._loop()
+
+    async def _loop(self) -> str:
         while True:
             schema = self._tools.get_schema(ToolSchemaFormat.OPENAI)
             messages = (

@@ -2,7 +2,6 @@ import asyncio
 import datetime as dt
 from dataclasses import dataclass
 
-from llmify import ChatCodex
 from pydantic import BaseModel, Field
 
 from agenttoolkit.tools import (
@@ -15,6 +14,7 @@ from agenttoolkit.tools import (
 )
 from experiments.agent import Agent
 from experiments.environments import Console
+from experiments.model import experiment_model
 
 
 @dataclass
@@ -117,7 +117,7 @@ def get_weather(city: str) -> WeatherActionResult:
 
 async def main() -> None:
     console = Console(tools, context=context)
-    model = ChatCodex.from_cli(model="gpt-5.6-terra", on_retry=console.on_retry)
+    model = experiment_model("gpt-5.6-terra", on_retry=console.on_retry)
     agent = Agent(
         model,
         tools,

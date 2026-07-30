@@ -3,13 +3,12 @@ import asyncio
 import logging
 from pathlib import Path, PurePosixPath
 
-from llmify import ChatCodex
-
 from agenttoolkit import Skills
 from agenttoolkit.builtins.shell import BindMount
 from agenttoolkit.tools import ToolContext, Tools
 from experiments.agent import Agent
 from experiments.environments import Console
+from experiments.model import experiment_model
 from experiments.sandboxing import experiment_workspace, workspace_sandbox
 from experiments.tools import register_shell_tool, register_skill_loader
 
@@ -56,7 +55,7 @@ async def main() -> None:
 
     console = Console(tools)
     agent = Agent(
-        ChatCodex.from_cli(model="gpt-5.6-terra", on_retry=console.on_retry),
+        experiment_model("gpt-5.6-terra", on_retry=console.on_retry),
         tools,
         system_prompt=_system_prompt(skills),
         on_tool_call=console.on_tool_call,

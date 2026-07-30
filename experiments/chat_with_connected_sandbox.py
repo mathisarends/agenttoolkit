@@ -2,8 +2,6 @@ import argparse
 import asyncio
 from pathlib import Path, PurePosixPath
 
-from llmify import ChatCodex
-
 from agenttoolkit import SkillRefreshMiddleware, Skills
 from agenttoolkit.builtins.fs import LocalWorkspace
 from agenttoolkit.builtins.shell import BindMount
@@ -11,6 +9,7 @@ from agenttoolkit.tools import ToolContext, Tools
 from agenttoolkit.tools.middleware import CallLoggingMiddleware
 from experiments.agent import Agent
 from experiments.environments import Console
+from experiments.model import experiment_model
 from experiments.sandboxing import connected_sandbox, experiment_workspace
 from experiments.tools import (
     register_file_tools,
@@ -77,7 +76,7 @@ async def main() -> None:
     )
     console = Console(tools)
     agent = Agent(
-        ChatCodex.from_cli(model="gpt-5.6-sol", on_retry=console.on_retry),
+        experiment_model("gpt-5.6-sol", on_retry=console.on_retry),
         tools,
         system_prompt=lambda: _system_prompt(skills),
         on_tool_call=console.on_tool_call,

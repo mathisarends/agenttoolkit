@@ -1,12 +1,11 @@
 import argparse
 import asyncio
 
-from llmify import ChatCodex
-
 from agenttoolkit.builtins.shell import BindMount
 from agenttoolkit.tools import ToolContext, Tools
 from experiments.agent import Agent
 from experiments.environments import Console
+from experiments.model import experiment_model
 from experiments.sandboxing import (
     DEFAULT_DOCKER_IMAGE,
     experiment_workspace,
@@ -72,7 +71,7 @@ async def main() -> None:
     )
     console = Console(tools)
 
-    model = ChatCodex.from_cli(model="gpt-5.6-sol", on_retry=console.on_retry)
+    model = experiment_model("gpt-5.6-sol", on_retry=console.on_retry)
     agent = Agent(
         model,
         tools,

@@ -1,10 +1,15 @@
+import asyncio
 import sys
 from typing import Any
 
-from llmify import RetryEvent
+from llmify import RetryableError, RetryEvent
 
 from agenttoolkit.tools import ActionResult, Tool, ToolContext, Tools
 from experiments.agent import Agent
+
+# Second line of defence behind llmify's own retries: those cover a burst of a
+# few seconds, these cover an outage that lasts minutes.
+_RESUME_DELAYS = (15.0, 45.0, 120.0)
 
 
 class Console:
@@ -69,7 +74,7 @@ class Console:
     ) -> None:
         _configure_stdout()
         if prompt:
-            print(f"agent> {await agent.run(prompt)}")
+            await self._turn(agent, prompt)
             return
 
         print(banner)
@@ -79,7 +84,32 @@ class Console:
                 return
             if not user_input:
                 continue
-            print(f"agent> {await agent.run(user_input)}")
+            await self._turn(agent, user_input)
+
+    async def _turn(self, agent: Agent, user_input: str) -> None:
+        answer = await self._answer(agent, user_input)
+        if answer is not None:
+            print(f"agent> {answer}")
+
+    async def _answer(self, agent: Agent, user_input: str) -> str | None:
+        try:
+            return await agent.run(user_input)
+        except RetryableError as error:
+            last_error = error
+
+        # The user message is already in the history, so the later attempts
+        # resume that turn instead of sending it a second time.
+        for delay in _RESUME_DELAYS:
+            print(f"  .. provider unavailable ({last_error}); resuming in {delay:.0f}s")
+            await asyncio.sleep(delay)
+            try:
+                return await agent.resume()
+            except RetryableError as error:
+                last_error = error
+
+        print(f"  !! provider still unavailable: {last_error}")
+        print("  !! turn aborted - send a message to try again.")
+        return None
 
 
 def _configure_stdout() -> None:
