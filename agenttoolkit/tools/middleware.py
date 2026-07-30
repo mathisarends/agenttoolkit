@@ -122,15 +122,7 @@ def _writes_workspace(tool: Tool) -> bool:
 
 
 class SkillRefreshMiddleware(ToolMiddleware):
-    """Refresh changed skills after tools that may write skill documents."""
-
-    def __init__(
-        self,
-        skills: Skills,
-        *,
-        when: ToolPredicate = _writes_workspace,
-    ) -> None:
-        self._skills = skills
+    def __init__(self, *, when: ToolPredicate = _writes_workspace) -> None:
         self._when = when
 
     async def __call__(
@@ -142,8 +134,12 @@ class SkillRefreshMiddleware(ToolMiddleware):
         if call.tool is None or not self._when(call.tool):
             return result
 
+        skills = None if call.context is None else call.context.resolve(Skills)
+        if skills is None:
+            return result
+
         try:
-            self._skills.refresh_if_changed()
+            skills.refresh_if_changed()
         except ValueError:
             logger.exception(
                 "Skill refresh failed after tool '%s'; keeping the active registry.",

@@ -58,7 +58,7 @@ async def main() -> None:
     tools = Tools(
         context=ToolContext(sandbox, skills, workspace),
         middleware=[
-            SkillRefreshMiddleware(skills),
+            SkillRefreshMiddleware(),
             CallLoggingMiddleware(),
         ],
     )

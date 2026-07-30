@@ -500,12 +500,17 @@ from agenttoolkit import SkillRefreshMiddleware
 
 tools = Tools(
     context=ToolContext(skills),
-    middleware=[SkillRefreshMiddleware(skills)],
+    middleware=[SkillRefreshMiddleware()],
 )
 ```
 
+The registry is resolved from the call's `ToolContext`, not captured at
+construction — swapping the context via `set_context(...)` or a per-call
+`context=` argument refreshes the registry actually in use, and the
+middleware is a no-op when the context holds no `Skills`.
+
 Pass `when=` to select tools by any other predicate over the `Tool`, e.g.
-`SkillRefreshMiddleware(skills, when=lambda tool: "skills" in tool.tags)`.
+`SkillRefreshMiddleware(when=lambda tool: "skills" in tool.tags)`.
 Invalid skill edits are not activated and
 the previous registry remains available. Applications that embed
 `skills.render_prompt()` in model context should render that dynamic portion

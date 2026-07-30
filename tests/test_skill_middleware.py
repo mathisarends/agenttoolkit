@@ -7,6 +7,7 @@ from agenttoolkit import (
     ActionResult,
     SkillRefreshMiddleware,
     Skills,
+    ToolContext,
     ToolEffect,
     Tools,
 )
@@ -40,7 +41,10 @@ def make_skill(root: Path, name: str = "existing") -> Path:
 async def test_writing_tool_refreshes_and_returns_new_catalog(tmp_path: Path) -> None:
     make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
+    tools = Tools(
+        context=ToolContext(skills),
+        middleware=[SkillRefreshMiddleware()],
+    )
 
     @tools.action("Write a skill", effects=(ToolEffect.WRITES_WORKSPACE,))
     def write_skill() -> str:
@@ -60,7 +64,10 @@ async def test_tool_without_write_effect_does_not_refresh_registry(
 ) -> None:
     make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
+    tools = Tools(
+        context=ToolContext(skills),
+        middleware=[SkillRefreshMiddleware()],
+    )
 
     @tools.action("Write without declaring the effect")
     def other_tool() -> str:
@@ -78,9 +85,10 @@ async def test_custom_predicate_selects_tools(tmp_path: Path) -> None:
     make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
     tools = Tools(
+        context=ToolContext(skills),
         middleware=[
-            SkillRefreshMiddleware(skills, when=lambda tool: "skills" in tool.tags),
-        ]
+            SkillRefreshMiddleware(when=lambda tool: "skills" in tool.tags),
+        ],
     )
 
     @tools.action("Write a skill", tags=["skills"])
@@ -101,7 +109,10 @@ async def test_invalid_edit_reports_error_and_keeps_active_registry(
 ) -> None:
     directory = make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
+    tools = Tools(
+        context=ToolContext(skills),
+        middleware=[SkillRefreshMiddleware()],
+    )
 
     @tools.action("Write an invalid skill", effects=(ToolEffect.WRITES_WORKSPACE,))
     def write_skill() -> str:
@@ -127,7 +138,10 @@ async def test_failed_writing_tool_still_reports_catalog_update(
 ) -> None:
     make_skill(tmp_path)
     skills = Skills.from_local_dir(tmp_path)
-    tools = Tools(middleware=[SkillRefreshMiddleware(skills)])
+    tools = Tools(
+        context=ToolContext(skills),
+        middleware=[SkillRefreshMiddleware()],
+    )
 
     @tools.action("Write and fail", effects=(ToolEffect.WRITES_WORKSPACE,))
     def write_skill() -> ActionResult:
@@ -138,3 +152,41 @@ async def test_failed_writing_tool_still_reports_catalog_update(
 
     assert result == ActionResult.fail("command failed")
     assert skills.names() == ["created", "existing"]
+
+
+@pytest.mark.asyncio
+async def test_context_without_skills_makes_the_middleware_a_no_op() -> None:
+    tools = Tools(middleware=[SkillRefreshMiddleware()])
+
+    @tools.action("Write something", effects=(ToolEffect.WRITES_WORKSPACE,))
+    def write_file() -> str:
+        return "written"
+
+    assert await tools.execute("write_file") == ActionResult.success("written")
+
+
+@pytest.mark.asyncio
+async def test_per_call_context_selects_the_refreshed_registry(
+    tmp_path: Path,
+) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    make_skill(first_root)
+    make_skill(second_root)
+    first = Skills.from_local_dir(first_root)
+    second = Skills.from_local_dir(second_root)
+    tools = Tools(
+        context=ToolContext(first),
+        middleware=[SkillRefreshMiddleware()],
+    )
+
+    @tools.action("Write a skill", effects=(ToolEffect.WRITES_WORKSPACE,))
+    def write_skill() -> str:
+        make_skill(first_root, "created-in-first")
+        make_skill(second_root, "created-in-second")
+        return "written"
+
+    await tools.execute("write_skill", context=ToolContext(second))
+
+    assert second.names() == ["created-in-second", "existing"]
+    assert first.names() == ["existing"]
