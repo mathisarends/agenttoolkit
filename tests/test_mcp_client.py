@@ -8,7 +8,8 @@ import pytest
 from mcp_types import CallToolResult, ListToolsResult, TextContent
 from mcp_types import Tool as MCPTool
 
-from agenttoolkit import (
+from agenttoolkit import Tools
+from agenttoolkit.mcp import (
     MCPClient,
     MCPServerClient,
     MCPToolPage,
@@ -17,7 +18,6 @@ from agenttoolkit import (
     SSEMCPClient,
     StdioMCPClient,
     StreamableHTTPMCPClient,
-    Tools,
 )
 from agenttoolkit.mcp import client as client_module
 from agenttoolkit.tools import ActionResult

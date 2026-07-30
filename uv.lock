@@ -23,6 +23,7 @@ mcp = [
 [package.dev-dependencies]
 dev = [
     { name = "import-linter" },
+    { name = "mcp" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -44,6 +45,7 @@ provides-extras = ["mcp"]
 [package.metadata.requires-dev]
 dev = [
     { name = "import-linter", specifier = ">=2.13" },
+    { name = "mcp", specifier = ">=2,<3" },
     { name = "pytest", specifier = ">=9.0" },
     { name = "pytest-asyncio", specifier = ">=1.0" },
     { name = "pytest-cov", specifier = ">=6.0" },

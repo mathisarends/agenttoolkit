@@ -6,14 +6,26 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Self, TextIO
 
-import httpx2
-from mcp import Client
-from mcp.client import Transport
-from mcp.client.sse import sse_client
-from mcp.client.stdio import StdioServerParameters, stdio_client
-from mcp.client.streamable_http import streamable_http_client
-from mcp.server import MCPServer, Server
-from mcp_types import CallToolResult, TextContent
+try:
+    import httpx2
+    from mcp import Client
+    from mcp.client import Transport
+    from mcp.client.sse import sse_client
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+    from mcp.client.streamable_http import streamable_http_client
+    from mcp.server import MCPServer, Server
+    from mcp_types import CallToolResult, TextContent
+except ModuleNotFoundError as exc:
+    if exc.name and exc.name.split(".", maxsplit=1)[0] in {
+        "httpx2",
+        "mcp",
+        "mcp_types",
+    }:
+        raise ModuleNotFoundError(
+            "MCP support requires the optional dependencies from the 'mcp' extra. "
+            "Install them with `pip install 'agenttoolkit[mcp]'`."
+        ) from exc
+    raise
 
 from agenttoolkit.mcp.base import MCPClient, MCPToolPage, MCPToolSpec
 from agenttoolkit.tools.results import ActionResult

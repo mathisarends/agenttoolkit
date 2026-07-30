@@ -19,6 +19,7 @@ mcp = [
 [dependency-groups]
 dev = [
     "import-linter>=2.13",
+    "mcp>=2,<3",
     "pytest>=9.0",
     "pytest-asyncio>=1.0",
     "pytest-cov>=6.0",
