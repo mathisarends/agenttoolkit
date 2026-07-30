@@ -3,9 +3,9 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Protocol, runtime_checkable
 
 
@@ -105,6 +105,7 @@ class LocalWorkspace:
         self,
         root: str | os.PathLike[str],
         *,
+        mounts: Mapping[str | PurePosixPath, str | os.PathLike[str]] | None = None,
         encoding: str = "utf-8",
         max_file_bytes: int | None = 10 * 1024 * 1024,
     ) -> None:
@@ -117,6 +118,7 @@ class LocalWorkspace:
         root_path.mkdir(parents=True, exist_ok=True)
 
         self._root = root_path.resolve()
+        self._mounts = _normalize_mounts(mounts)
         self._encoding = encoding
         self._max_file_bytes = max_file_bytes
 
@@ -177,7 +179,7 @@ class LocalWorkspace:
         elif not target.parent.is_dir():
             raise FileNotFoundError(target.parent)
 
-        self._assert_inside(target.parent.resolve())
+        self._assert_inside(target.parent.resolve(), self._base_of(target))
         _atomic_write(target, data)
 
     async def edit_file(
@@ -283,7 +285,7 @@ class LocalWorkspace:
                 break
             try:
                 lines = (
-                    (self._root / entry.path)
+                    self._resolve(entry.path)
                     .read_text(encoding=self._encoding)
                     .splitlines()
                 )
@@ -331,10 +333,7 @@ class LocalWorkspace:
             raise NotADirectoryError(directory)
 
         discovered = directory.rglob("*") if recursive else directory.iterdir()
-        candidates = sorted(
-            discovered,
-            key=lambda candidate: candidate.relative_to(self._root).as_posix(),
-        )
+        candidates = sorted(discovered, key=self._display)
         entries: list[Entry] = []
         for candidate in candidates:
             if limit is not None and len(entries) >= limit:
@@ -362,7 +361,7 @@ class LocalWorkspace:
         metadata = path.lstat()
         is_dir = path.is_dir()
         return Entry(
-            path=path.relative_to(self._root).as_posix() or ".",
+            path=self._display(path),
             is_dir=is_dir,
             is_symlink=path.is_symlink(),
             size=None if is_dir else metadata.st_size,
@@ -370,35 +369,86 @@ class LocalWorkspace:
         )
 
     def _resolve(self, path: str | os.PathLike[str]) -> Path:
-        requested = Path(path)
-        if requested.is_absolute():
-            target = requested.resolve(strict=False)
-        else:
-            target = (self._root / requested).resolve(strict=False)
-        self._assert_inside(target)
+        target, base = self._locate(path)
+        target = target.resolve(strict=False)
+        self._assert_inside(target, base)
         return target
 
     def _resolve_entry(self, path: str | os.PathLike[str]) -> Path:
-        requested = Path(path)
-        target = requested if requested.is_absolute() else self._root / requested
+        target, base = self._locate(path)
         target = Path(os.path.abspath(target))
-        self._assert_inside(target)
-        self._assert_inside(target.parent.resolve(strict=False))
+        self._assert_inside(target, base)
+        self._assert_inside(target.parent.resolve(strict=False), base)
         return target
 
-    def _assert_inside(self, path: Path) -> None:
+    def _locate(self, path: str | os.PathLike[str]) -> tuple[Path, Path]:
+        """Map a requested path to a host path plus the root it may not escape.
+
+        Mount prefixes are matched textually because a POSIX-absolute prefix
+        such as ``/skills`` is drive-relative on Windows, so ``Path`` would
+        silently reinterpret it against the current drive.
+        """
+        text = os.fspath(path).replace("\\", "/")
+        for prefix, mount in self._mounts:
+            if text == prefix:
+                return mount, mount
+            if text.startswith(f"{prefix}/"):
+                return mount / text[len(prefix) + 1 :], mount
+
+        requested = Path(path)
+        target = requested if requested.is_absolute() else self._root / requested
+        return target, self._root
+
+    def _assert_inside(self, path: Path, base: Path | None = None) -> None:
+        base = self._root if base is None else base
         try:
-            path.relative_to(self._root)
+            path.relative_to(base)
         except ValueError as error:
             raise PathOutsideWorkspaceError(
                 f"path is outside workspace: {path}"
             ) from error
+
+    def _base_of(self, path: Path) -> Path:
+        for _, mount in self._mounts:
+            if path == mount or mount in path.parents:
+                return mount
+        return self._root
+
+    def _display(self, path: Path) -> str:
+        base = self._base_of(path)
+        relative = path.relative_to(base).as_posix()
+        if base == self._root:
+            return relative if relative != "." else "."
+        prefix = next(prefix for prefix, mount in self._mounts if mount == base)
+        return prefix if relative == "." else f"{prefix}/{relative}"
 
     def _check_size(self, size: int) -> None:
         if self._max_file_bytes is not None and size > self._max_file_bytes:
             raise FileTooLargeError(
                 f"file is {size} bytes; limit is {self._max_file_bytes} bytes"
             )
+
+
+def _normalize_mounts(
+    mounts: Mapping[str | PurePosixPath, str | os.PathLike[str]] | None,
+) -> tuple[tuple[str, Path], ...]:
+    if not mounts:
+        return ()
+
+    normalized: list[tuple[str, Path]] = []
+    for prefix, directory in mounts.items():
+        text = str(prefix).replace("\\", "/").rstrip("/")
+        if not text.startswith("/"):
+            raise ValueError(f"mount prefix must be absolute: {prefix}")
+
+        target = Path(directory).expanduser()
+        if target.exists() and not target.is_dir():
+            raise NotADirectoryError(target)
+        target.mkdir(parents=True, exist_ok=True)
+        normalized.append((text, target.resolve()))
+
+    # Longest first so nested mounts win over their parent prefix.
+    return tuple(sorted(normalized, key=lambda mount: len(mount[0]), reverse=True))
 
 
 def _validate_pattern(pattern: str) -> None:

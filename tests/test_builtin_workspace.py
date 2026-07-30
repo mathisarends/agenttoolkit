@@ -166,3 +166,43 @@ def test_workspace_constructor_validation(tmp_path: Path) -> None:
     file_root.write_text("content")
     with pytest.raises(NotADirectoryError):
         LocalWorkspace(file_root)
+
+
+@pytest.mark.asyncio
+async def test_workspace_mounts_expose_extra_roots(tmp_path: Path) -> None:
+    skills = tmp_path / "skills"
+    workspace = LocalWorkspace(tmp_path / "workspace", mounts={"/skills": skills})
+
+    await workspace.write_file("/skills/openhue-cli/SKILL.md", "hello world")
+    assert (skills / "openhue-cli" / "SKILL.md").read_text() == "hello world"
+    assert await workspace.read_file("/skills/openhue-cli/SKILL.md") == "hello world"
+    assert (
+        await workspace.edit_file("/skills/openhue-cli/SKILL.md", "world", "agent") == 1
+    )
+
+    entry = await workspace.stat("/skills/openhue-cli/SKILL.md")
+    assert entry is not None
+    assert entry.path == "/skills/openhue-cli/SKILL.md"
+    assert [
+        item.path for item in await workspace.list_dir("/skills", recursive=True)
+    ] == [
+        "/skills/openhue-cli",
+        "/skills/openhue-cli/SKILL.md",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_workspace_mounts_still_reject_escaping_paths(tmp_path: Path) -> None:
+    workspace = LocalWorkspace(
+        tmp_path / "workspace", mounts={"/skills": tmp_path / "skills"}
+    )
+
+    with pytest.raises(PathOutsideWorkspaceError):
+        await workspace.write_file("/skills/../escape.txt", "no")
+    with pytest.raises(PathOutsideWorkspaceError):
+        await workspace.read_file("/other/file.txt")
+
+
+def test_workspace_mount_prefix_must_be_absolute(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="absolute"):
+        LocalWorkspace(tmp_path / "workspace", mounts={"skills": tmp_path / "skills"})
