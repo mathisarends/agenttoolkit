@@ -7,45 +7,6 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "agenttoolkit"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "import-linter" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "python-dotenv" },
-    { name = "ruff" },
-]
-py-llmify = [
-    { name = "py-llmify", extra = ["openai"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "import-linter", specifier = ">=2.13" },
-    { name = "pytest", specifier = ">=9.0" },
-    { name = "pytest-asyncio", specifier = ">=1.0" },
-    { name = "pytest-cov", specifier = ">=6.0" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "ruff", specifier = ">=0.9" },
-]
-py-llmify = [{ name = "py-llmify", extras = ["openai"], specifier = "==0.9.0" }]
-
-[[package]]
 name = "annotated-types"
 version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -349,6 +310,45 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
+
+[[package]]
+name = "mm-agenttoolkit"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "import-linter" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "python-dotenv" },
+    { name = "ruff" },
+]
+py-llmify = [
+    { name = "py-llmify", extra = ["openai"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "import-linter", specifier = ">=2.13" },
+    { name = "pytest", specifier = ">=9.0" },
+    { name = "pytest-asyncio", specifier = ">=1.0" },
+    { name = "pytest-cov", specifier = ">=6.0" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "ruff", specifier = ">=0.9" },
+]
+py-llmify = [{ name = "py-llmify", extras = ["openai"], specifier = "==0.9.0" }]
 
 [[package]]
 name = "openai"
