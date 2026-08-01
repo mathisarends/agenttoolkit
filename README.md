@@ -50,12 +50,12 @@ it is a building block, not a framework.
 ## Installation
 
 ```console
-uv add agenttoolkit
+uv add mm-agenttoolkit
 ```
 
-Requires Python 3.13–3.14. Modules that use forward references should add
+Requires Python 3.13+. On 3.13, modules that use forward references need
 `from __future__ import annotations`, since lazy annotation evaluation
-(PEP 649) is native only to 3.14+.
+(PEP 649) is only native starting with 3.14.
 
 ## Quickstart
 
