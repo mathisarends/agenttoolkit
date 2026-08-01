@@ -3,8 +3,8 @@ from typing import Annotated, Any, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
-from agenttoolkit.tools.context import _INJECT_MARKER, ToolContext
-from agenttoolkit.tools.models import Tool
+from agenttk.tools.context import _INJECT_MARKER, ToolContext
+from agenttk.tools.models import Tool
 
 
 def resolve_arguments(

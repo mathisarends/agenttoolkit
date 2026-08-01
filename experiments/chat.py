@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
-from agenttoolkit.tools import (
+from agenttk.tools import (
     ActionResult,
     Inject,
     ToolContext,

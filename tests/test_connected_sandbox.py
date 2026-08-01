@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agenttoolkit.builtins.shell import BindMount
+from agenttk.builtins.shell import BindMount
 from experiments.sandboxing import connected_sandbox
 
 _CONNECTED_ENVIRONMENT = (

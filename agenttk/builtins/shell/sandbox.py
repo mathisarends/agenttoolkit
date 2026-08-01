@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from agenttoolkit.builtins.shell.policy import SandboxPolicy
+from agenttk.builtins.shell.policy import SandboxPolicy
 
 
 class SandboxError(Exception):

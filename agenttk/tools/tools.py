@@ -3,24 +3,24 @@ from typing import Any, overload
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from agenttoolkit.tools.arguments import resolve_arguments
-from agenttoolkit.tools.binding import ToolAvailability, ToolDescription
-from agenttoolkit.tools.context import ToolContext
-from agenttoolkit.tools.middleware import (
+from agenttk.tools.arguments import resolve_arguments
+from agenttk.tools.binding import ToolAvailability, ToolDescription
+from agenttk.tools.context import ToolContext
+from agenttk.tools.middleware import (
     ToolCall,
     ToolMiddleware,
     compose,
     default_chain,
 )
-from agenttoolkit.tools.models import (
+from agenttk.tools.models import (
     StatusFormatter,
     Tool,
     ToolEffect,
     ToolMetadata,
     ToolSchemaFormat,
 )
-from agenttoolkit.tools.results import ActionResult
-from agenttoolkit.tools.schema import ToolSchema
+from agenttk.tools.results import ActionResult
+from agenttk.tools.schema import ToolSchema
 
 
 class Tools:

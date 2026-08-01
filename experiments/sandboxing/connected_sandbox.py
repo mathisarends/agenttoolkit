@@ -5,7 +5,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agenttoolkit.builtins.shell import (
+from agenttk.builtins.shell import (
     BindMount,
     DockerNetworkMode,
     DockerSandbox,
@@ -14,7 +14,7 @@ from agenttoolkit.builtins.shell import (
 
 load_dotenv()
 
-_IMAGE = "agenttoolkit-connected:latest"
+_IMAGE = "agenttk-connected:latest"
 _CONNECTED_ENVIRONMENT = (
     "HUE_BRIDGE_IP",
     "HUE_APP_KEY",

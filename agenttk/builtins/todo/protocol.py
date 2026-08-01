@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
-from agenttoolkit.builtins.todo.models import Todo, TodoStatus
+from agenttk.builtins.todo.models import Todo, TodoStatus
 
 
 @runtime_checkable

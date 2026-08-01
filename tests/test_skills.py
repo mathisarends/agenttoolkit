@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agenttoolkit import (
+from agenttk import (
     LoadedSkill,
     Skills,
     parse_skill,

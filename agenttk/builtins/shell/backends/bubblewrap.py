@@ -3,8 +3,8 @@ import shutil
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
-from agenttoolkit.builtins.shell.policy import SandboxPolicy
-from agenttoolkit.builtins.shell.sandbox import (
+from agenttk.builtins.shell.policy import SandboxPolicy
+from agenttk.builtins.shell.sandbox import (
     SandboxResult,
     SandboxUnavailableError,
     run_process,

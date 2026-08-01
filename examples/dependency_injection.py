@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from agenttoolkit import Inject, ToolContext, Tools
+from agenttk import Inject, ToolContext, Tools
 
 
 @dataclass
@@ -21,7 +21,7 @@ def search(query: str, client: Inject[SearchClient]) -> str:
 
 async def main() -> None:
     print(tools.get_schema()[0].parameters)
-    result = await tools.execute("search", {"query": "agenttoolkit"})
+    result = await tools.execute("search", {"query": "agenttk"})
     print(result)
 
 

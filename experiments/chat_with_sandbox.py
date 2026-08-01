@@ -1,8 +1,8 @@
 import argparse
 import asyncio
 
-from agenttoolkit.builtins.shell import BindMount
-from agenttoolkit.tools import ToolContext, Tools
+from agenttk.builtins.shell import BindMount
+from agenttk.tools import ToolContext, Tools
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model

@@ -4,8 +4,8 @@ from typing import cast
 
 import pytest
 
-import agenttoolkit.builtins.shell.backends.docker as docker_backend
-from agenttoolkit.builtins.shell import (
+import agenttk.builtins.shell.backends.docker as docker_backend
+from agenttk.builtins.shell import (
     BindMount,
     BubblewrapSandbox,
     DockerNetworkMode,

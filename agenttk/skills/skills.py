@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 from typing import Self
 
-from agenttoolkit.skills.models import LoadedSkill, Skill, SkillChanges, parse_skill
+from agenttk.skills.models import LoadedSkill, Skill, SkillChanges, parse_skill
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@ import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
-from agenttoolkit.builtins.shell import (
+from agenttk.builtins.shell import (
     BindMount,
     DockerSandbox,
     Sandbox,
@@ -12,7 +12,7 @@ from agenttoolkit.builtins.shell import (
 )
 
 DEFAULT_DOCKER_IMAGE = "python:3.14-slim"
-_RUNTIME_ROOT = Path(tempfile.gettempdir()) / "agenttoolkit-experiments"
+_RUNTIME_ROOT = Path(tempfile.gettempdir()) / "agenttk-experiments"
 
 
 def experiment_workspace(name: str) -> Path:

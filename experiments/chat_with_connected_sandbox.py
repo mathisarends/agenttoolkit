@@ -2,11 +2,11 @@ import argparse
 import asyncio
 from pathlib import Path, PurePosixPath
 
-from agenttoolkit import SkillRefreshMiddleware, Skills
-from agenttoolkit.builtins.fs import LocalWorkspace
-from agenttoolkit.builtins.shell import BindMount
-from agenttoolkit.tools import ToolContext, Tools
-from agenttoolkit.tools.middleware import CallLoggingMiddleware
+from agenttk import SkillRefreshMiddleware, Skills
+from agenttk.builtins.fs import LocalWorkspace
+from agenttk.builtins.shell import BindMount
+from agenttk.tools import ToolContext, Tools
+from agenttk.tools.middleware import CallLoggingMiddleware
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model

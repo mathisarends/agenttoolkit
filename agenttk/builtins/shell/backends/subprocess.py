@@ -2,8 +2,8 @@ import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from agenttoolkit.builtins.shell.policy import SandboxPolicy
-from agenttoolkit.builtins.shell.sandbox import SandboxResult, run_process
+from agenttk.builtins.shell.policy import SandboxPolicy
+from agenttk.builtins.shell.sandbox import SandboxResult, run_process
 
 
 class UnsafeLocalSandbox:

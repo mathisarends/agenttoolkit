@@ -2,8 +2,8 @@ from pathlib import PurePosixPath
 
 from pydantic import BaseModel, Field
 
-from agenttoolkit import Skills
-from agenttoolkit.tools import ActionResult, Inject, Tools
+from agenttk import Skills
+from agenttk.tools import ActionResult, Inject, Tools
 
 
 class LoadSkillParams(BaseModel):

@@ -2,7 +2,7 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from agenttoolkit import Tools, ToolSchemaFormat
+from agenttk import Tools, ToolSchemaFormat
 
 tools = Tools()
 

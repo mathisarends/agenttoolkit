@@ -1,5 +1,5 @@
 [project]
-name = "agenttoolkit"
+name = "agenttk"
 version = "0.1.0"
 description = "Provider-neutral tool definitions and execution for Python agents"
 readme = "README.md"
@@ -39,36 +39,36 @@ line-length = 88
 select = ["B", "E", "F", "I", "RUF", "UP"]
 
 [tool.importlinter]
-root_package = "agenttoolkit"
+root_package = "agenttk"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Core does not know about built-ins"
 type = "forbidden"
-source_modules = ["agenttoolkit.tools", "agenttoolkit.skills"]
-forbidden_modules = ["agenttoolkit.builtins"]
+source_modules = ["agenttk.tools", "agenttk.skills"]
+forbidden_modules = ["agenttk.builtins"]
 
 [[tool.importlinter.contracts]]
 name = "Package layering"
 type = "layers"
-layers = ["agenttoolkit.builtins", "agenttoolkit.tools"]
+layers = ["agenttk.builtins", "agenttk.tools"]
 
 [[tool.importlinter.contracts]]
 name = "Sandbox port does not know about backends"
 type = "forbidden"
 source_modules = [
-    "agenttoolkit.builtins.shell.sandbox",
-    "agenttoolkit.builtins.shell.policy",
+    "agenttk.builtins.shell.sandbox",
+    "agenttk.builtins.shell.policy",
 ]
-forbidden_modules = ["agenttoolkit.builtins.shell.backends"]
+forbidden_modules = ["agenttk.builtins.shell.backends"]
 
 [[tool.importlinter.contracts]]
 name = "Optional dependencies stay isolated"
 type = "forbidden"
 source_modules = [
-    "agenttoolkit.tools",
-    "agenttoolkit.skills",
-    "agenttoolkit.builtins.fs",
+    "agenttk.tools",
+    "agenttk.skills",
+    "agenttk.builtins.fs",
 ]
 forbidden_modules = ["docker", "e2b_code_interpreter"]
 
@@ -76,7 +76,7 @@ forbidden_modules = ["docker", "e2b_code_interpreter"]
 addopts = [
     "--strict-config",
     "--strict-markers",
-    "--cov=agenttoolkit",
+    "--cov=agenttk",
     "--cov-branch",
     "--cov-report=term-missing:skip-covered",
     "--cov-fail-under=90",
@@ -88,7 +88,7 @@ xfail_strict = true
 [tool.coverage.run]
 branch = true
 relative_files = true
-source = ["agenttoolkit"]
+source = ["agenttk"]
 
 [tool.coverage.report]
 exclude_also = [
