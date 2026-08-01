@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
-from agenttk.builtins.shell import Sandbox
-from agenttk.tools import ActionResult, Inject, ToolEffect, Tools
+from agenttoolkit.builtins.shell import Sandbox
+from agenttoolkit.tools import ActionResult, Inject, ToolEffect, Tools
 
 
 class ShellParams(BaseModel):

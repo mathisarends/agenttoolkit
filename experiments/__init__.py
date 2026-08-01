@@ -1,1 +1,1 @@
-"""Small, runnable examples built with agenttk."""
+"""Small, runnable examples built with agenttoolkit."""

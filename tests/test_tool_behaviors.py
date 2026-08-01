@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from agenttk import (
+from agenttoolkit import (
     ActionResult,
     Inject,
     Tool,

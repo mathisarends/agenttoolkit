@@ -1,7 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from agenttk import Skills
+from agenttoolkit import Skills
 
 SKILL_MD = """\
 ---

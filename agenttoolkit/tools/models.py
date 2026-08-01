@@ -10,9 +10,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from agenttk.tools.binding import ToolAvailability, ToolDescription
-from agenttk.tools.context import ToolContext
-from agenttk.tools.schema import ToolSchema, _schema_model
+from agenttoolkit.tools.binding import ToolAvailability, ToolDescription
+from agenttoolkit.tools.context import ToolContext
+from agenttoolkit.tools.schema import ToolSchema, _schema_model
 
 
 class ToolSchemaFormat(StrEnum):

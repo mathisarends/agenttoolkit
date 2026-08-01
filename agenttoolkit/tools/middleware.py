@@ -6,10 +6,10 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from agenttk.skills import Skills
-from agenttk.tools.context import ToolContext
-from agenttk.tools.models import Tool, ToolEffect
-from agenttk.tools.results import ActionResult
+from agenttoolkit.skills import Skills
+from agenttoolkit.tools.context import ToolContext
+from agenttoolkit.tools.models import Tool, ToolEffect
+from agenttoolkit.tools.results import ActionResult
 
 logger = logging.getLogger(__name__)
 

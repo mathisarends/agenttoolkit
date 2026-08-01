@@ -3,9 +3,9 @@ import asyncio
 import logging
 from pathlib import Path, PurePosixPath
 
-from agenttk import Skills
-from agenttk.builtins.shell import BindMount
-from agenttk.tools import ToolContext, Tools
+from agenttoolkit import Skills
+from agenttoolkit.builtins.shell import BindMount
+from agenttoolkit.tools import ToolContext, Tools
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model

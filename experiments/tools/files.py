@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
-from agenttk.builtins.fs import Workspace, WorkspaceError
-from agenttk.tools import ActionResult, Inject, ToolEffect, Tools
+from agenttoolkit.builtins.fs import Workspace, WorkspaceError
+from agenttoolkit.tools import ActionResult, Inject, ToolEffect, Tools
 
 
 class ReadFileParams(BaseModel):

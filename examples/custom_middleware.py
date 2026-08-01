@@ -1,9 +1,9 @@
 import asyncio
 import time
 
-from agenttk import Tools
-from agenttk.tools.middleware import ToolCall, ToolHandler, ToolMiddleware
-from agenttk.tools.results import ActionResult
+from agenttoolkit import Tools
+from agenttoolkit.tools.middleware import ToolCall, ToolHandler, ToolMiddleware
+from agenttoolkit.tools.results import ActionResult
 
 
 class TimingMiddleware(ToolMiddleware):

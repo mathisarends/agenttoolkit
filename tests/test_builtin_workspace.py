@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agenttk.builtins.fs import (
+from agenttoolkit.builtins.fs import (
     EditError,
     Entry,
     FileTooLargeError,

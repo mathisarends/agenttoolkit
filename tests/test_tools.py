@@ -4,7 +4,7 @@ from typing import Annotated
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from agenttk import (
+from agenttoolkit import (
     ActionResult,
     Inject,
     ToolContext,
@@ -169,7 +169,7 @@ async def test_tool_errors_are_logged_and_returned_by_the_boundary(
     def internal_failure() -> None:
         raise RuntimeError("secret")
 
-    with caplog.at_level(logging.ERROR, logger="agenttk.tools.middleware"):
+    with caplog.at_level(logging.ERROR, logger="agenttoolkit.tools.middleware"):
         result = await tools.execute("internal_failure")
 
     assert "Tool 'internal_failure' failed" in caplog.text

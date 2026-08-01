@@ -7,8 +7,8 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Self
 
-from agenttk.builtins.shell.policy import SandboxPolicy
-from agenttk.builtins.shell.sandbox import (
+from agenttoolkit.builtins.shell.policy import SandboxPolicy
+from agenttoolkit.builtins.shell.sandbox import (
     SandboxError,
     SandboxResult,
     SandboxUnavailableError,
@@ -129,7 +129,7 @@ class DockerSandbox:
         stdin: str | bytes | None = None,
         timeout: float | None = None,
     ) -> SandboxResult:
-        container_name = f"agenttk-{uuid.uuid4().hex}"
+        container_name = f"agenttoolkit-{uuid.uuid4().hex}"
         argv = self.build_argv(
             command,
             cwd=cwd,

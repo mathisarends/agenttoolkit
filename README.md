@@ -1,6 +1,6 @@
-# agenttk
+# agenttoolkit
 
-`agenttk` provides one provider-neutral definition for tools exposed to
+`agenttoolkit` provides one provider-neutral definition for tools exposed to
 LLM agents. Define a tool once — schema, availability, metadata, and
 execution logic — and expose it to OpenAI, Anthropic, or any other provider
 without duplicating definitions.
@@ -50,7 +50,7 @@ it is a building block, not a framework.
 ## Installation
 
 ```console
-uv add agenttk
+uv add agenttoolkit
 ```
 
 Requires Python 3.13–3.14. Modules that use forward references should add
@@ -66,7 +66,7 @@ makes, and feed the result back:
 ```python
 from pydantic import BaseModel, Field
 
-from agenttk import ActionResult, Inject, ToolContext, Tools, ToolSchemaFormat
+from agenttoolkit import ActionResult, Inject, ToolContext, Tools, ToolSchemaFormat
 
 
 class SearchParams(BaseModel):
@@ -164,7 +164,7 @@ exist for the host loop that dispatches the call:
   application needs, readable as `tool.extra`.
 - `requires_approval` — readable as `tool.requires_approval`; check it
   before calling `tools.execute(...)` if the action needs user
-  confirmation first. `agenttk` does not enforce approval itself.
+  confirmation first. `agenttoolkit` does not enforce approval itself.
 
 ```python
 tool = tools.get("refund")
@@ -214,7 +214,7 @@ dependency is present (and, optionally, satisfies a predicate). Predicates
 compose with `&`, `|`, and `~`:
 
 ```python
-from agenttk import provided, requires
+from agenttoolkit import provided, requires
 
 
 @tools.action(
@@ -230,7 +230,7 @@ depend on context (e.g. embedding a resolved account name), with a fallback
 for when the dependency isn't provided:
 
 ```python
-from agenttk import description_from_context
+from agenttoolkit import description_from_context
 
 description = description_from_context(
     BankingClient,
@@ -337,7 +337,7 @@ argument validation — followed by call logging. Pass `middleware=` to run
 additional steps between the core and logging, e.g. a timeout:
 
 ```python
-from agenttk import ToolCall, ToolMiddleware
+from agenttoolkit import ToolCall, ToolMiddleware
 
 
 class TimeoutMiddleware(ToolMiddleware):
@@ -367,7 +367,7 @@ tools.merge(other_tools, replace=True)  # other_tools wins on collisions
 
 ## Filesystem and shell primitives
 
-`agenttk.builtins` contains raw async implementations rather than a
+`agenttoolkit.builtins` contains raw async implementations rather than a
 predefined set of model-facing tools. Applications can use them directly,
 inject them through `ToolContext`, or expose only the operations appropriate
 for a particular agent.
@@ -375,7 +375,7 @@ for a particular agent.
 ```python
 from pathlib import Path
 
-from agenttk.builtins import (
+from agenttoolkit.builtins import (
     BindMount,
     DockerSandbox,
     LocalWorkspace,
@@ -454,7 +454,7 @@ skills/
 its parent directory name.
 
 ```python
-from agenttk import Skills
+from agenttoolkit import Skills
 
 skills = Skills.from_local_dir("./skills")
 
@@ -496,7 +496,7 @@ result — so a newly added write tool is covered as soon as it declares its
 effect, with no list of tool names to keep in sync:
 
 ```python
-from agenttk import SkillRefreshMiddleware
+from agenttoolkit import SkillRefreshMiddleware
 
 tools = Tools(
     context=ToolContext(skills),
@@ -533,7 +533,7 @@ uv run --locked ruff check .
 uv run --locked pytest
 ```
 
-The test command measures branch coverage for `agenttk` and fails
+The test command measures branch coverage for `agenttoolkit` and fails
 below 90%. Dependabot groups Python dependency updates into one weekly pull
 request; the same CI matrix validates every update on Python 3.13 and 3.14.
 

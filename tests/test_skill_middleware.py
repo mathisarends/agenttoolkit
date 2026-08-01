@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from agenttk import (
+from agenttoolkit import (
     ActionResult,
     SkillRefreshMiddleware,
     Skills,

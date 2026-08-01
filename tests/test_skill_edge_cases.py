@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from agenttk import Skills, parse_skill
+from agenttoolkit import Skills, parse_skill
 
 
 def skill_source(

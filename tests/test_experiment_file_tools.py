@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from agenttk.builtins.fs import LocalWorkspace
-from agenttk.tools import ActionResult, ToolContext, ToolEffect, Tools
+from agenttoolkit.builtins.fs import LocalWorkspace
+from agenttoolkit.tools import ActionResult, ToolContext, ToolEffect, Tools
 from experiments.tools import register_file_tools
 
 
