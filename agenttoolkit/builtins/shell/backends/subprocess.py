@@ -52,4 +52,5 @@ class LocalShellRunner:
                 self._defaults.limits.timeout_seconds if timeout is None else timeout
             ),
             max_output_bytes=self._defaults.limits.max_output_bytes,
+            spill_directory=self._defaults.spill_directory,
         )

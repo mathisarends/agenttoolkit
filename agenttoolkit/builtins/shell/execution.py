@@ -19,11 +19,19 @@ class CommandLimits:
 
 @dataclass(frozen=True, slots=True, init=False)
 class CommandDefaults:
-    """Backend-independent defaults applied to command execution."""
+    """Backend-independent defaults applied to command execution.
+
+    `spill_directory` is opt-in: when set, output exceeding
+    `limits.max_output_bytes` is written there in full instead of being
+    dropped. The path is resolved on the machine running the process, which
+    for a sandbox backend is the host and not the sandbox -- point it at a
+    bind-mounted location if the agent is meant to read the file back.
+    """
 
     working_directory: Path | None
     environment: Mapping[str, str]
     limits: CommandLimits
+    spill_directory: Path | None
 
     def __init__(
         self,
@@ -31,6 +39,7 @@ class CommandDefaults:
         *,
         environment: Mapping[str, str] | None = None,
         limits: CommandLimits | None = None,
+        spill_directory: PathInput | None = None,
     ) -> None:
         normalized_environment: dict[str, str] = {}
         for key, value in (environment or {}).items():
@@ -53,6 +62,11 @@ class CommandDefaults:
             MappingProxyType(normalized_environment),
         )
         object.__setattr__(self, "limits", limits or CommandLimits())
+        object.__setattr__(
+            self,
+            "spill_directory",
+            None if spill_directory is None else _normalize(spill_directory),
+        )
 
     def select_working_directory(self, path: PathInput | None = None) -> Path:
         if path is None:

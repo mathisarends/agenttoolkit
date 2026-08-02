@@ -244,6 +244,7 @@ class DockerSandbox:
                         else timeout
                     ),
                     max_output_bytes=self._defaults.limits.max_output_bytes,
+                    spill_directory=self._defaults.spill_directory,
                 )
             except CommandUnavailableError:
                 raise

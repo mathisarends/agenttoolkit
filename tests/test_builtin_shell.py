@@ -114,7 +114,7 @@ async def test_local_shell_runner_executes_and_enforces_output_limit(
     defaults = CommandDefaults(
         tmp_path,
         environment={"FROM_POLICY": "yes"},
-        limits=CommandLimits(timeout_seconds=2, max_output_bytes=3),
+        limits=CommandLimits(timeout_seconds=2, max_output_bytes=4),
     )
     runner = LocalShellRunner(
         defaults,
@@ -130,7 +130,89 @@ async def test_local_shell_runner_executes_and_enforces_output_limit(
     )
     assert result.ok
     assert result.output_truncated
-    assert len(result.stdout.encode()) <= 3
+    assert result.stdout_omitted_bytes > 0
+    assert "omitted" in result.stdout
+    assert result.spill_paths == ()
+
+
+@pytest.mark.asyncio
+async def test_capture_keeps_both_ends_and_isolates_stream_budgets(
+    tmp_path: Path,
+) -> None:
+    runner = LocalShellRunner(
+        CommandDefaults(
+            tmp_path,
+            limits=CommandLimits(timeout_seconds=10, max_output_bytes=64),
+        ),
+        shell=sys.executable,
+        shell_arguments=("-c",),
+    )
+    result = await runner.execute(
+        "import sys; sys.stdout.write('START' + 'x' * 5000 + 'END'); "
+        "sys.stderr.write('failure reason')"
+    )
+
+    assert result.stdout.startswith("START")
+    assert result.stdout.endswith("END")
+    # A chatty stdout must not consume the budget that stderr needs.
+    assert result.stderr == "failure reason"
+    assert result.stderr_omitted_bytes == 0
+
+
+@pytest.mark.asyncio
+async def test_unbounded_capture_keeps_everything(tmp_path: Path) -> None:
+    runner = LocalShellRunner(
+        CommandDefaults(
+            tmp_path,
+            limits=CommandLimits(timeout_seconds=10, max_output_bytes=None),
+        ),
+        shell=sys.executable,
+        shell_arguments=("-c",),
+    )
+    result = await runner.execute("import sys; sys.stdout.write('a' * 5000)")
+
+    assert result.stdout == "a" * 5000
+    assert not result.output_truncated
+
+
+@pytest.mark.asyncio
+async def test_spill_directory_preserves_full_output(tmp_path: Path) -> None:
+    spill = tmp_path / "overflow"
+    runner = LocalShellRunner(
+        CommandDefaults(
+            tmp_path,
+            limits=CommandLimits(timeout_seconds=10, max_output_bytes=64),
+            spill_directory=spill,
+        ),
+        shell=sys.executable,
+        shell_arguments=("-c",),
+    )
+    result = await runner.execute("import sys; sys.stdout.write('a' * 5000)")
+
+    assert result.stdout_spill_path is not None
+    assert result.stdout_spill_path.read_bytes() == b"a" * 5000
+    assert str(result.stdout_spill_path) in result.stdout
+    # stderr stayed inside its budget, so no file was created for it.
+    assert result.stderr_spill_path is None
+
+
+@pytest.mark.asyncio
+async def test_spill_directory_untouched_without_overflow(tmp_path: Path) -> None:
+    spill = tmp_path / "overflow"
+    runner = LocalShellRunner(
+        CommandDefaults(
+            tmp_path,
+            limits=CommandLimits(timeout_seconds=10, max_output_bytes=4096),
+            spill_directory=spill,
+        ),
+        shell=sys.executable,
+        shell_arguments=("-c",),
+    )
+    result = await runner.execute("print('small')")
+
+    assert result.stdout.strip() == "small"
+    assert not result.output_truncated
+    assert not spill.exists()
 
 
 @pytest.mark.asyncio

@@ -1,3 +1,4 @@
+from .output import OutputBudget
 from .skills import (
     LoadedSkill,
     Skill,
@@ -31,6 +32,7 @@ __all__ = [
     "ErrorBoundaryMiddleware",
     "Inject",
     "LoadedSkill",
+    "OutputBudget",
     "Skill",
     "SkillChanges",
     "SkillRefreshMiddleware",
