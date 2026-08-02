@@ -219,16 +219,16 @@ def test_registry_merge_iteration_and_replacement_are_explicit() -> None:
     assert next(iter(first)).description == "New implementation"
 
 
-def test_available_tools_always_use_registry_context() -> None:
+def test_per_call_context_does_not_replace_the_registry_context() -> None:
     tools = Tools(context=ToolContext(Service("registry")))
 
     @tools.action("Requires a service", available_when=provided(Service))
     def current() -> None:
         pass
 
-    assert [tool.name for tool in tools.get_available()] == ["current"]
+    assert [schema.name for schema in tools.get_schema()] == ["current"]
     assert tools.get_schema(context=ToolContext()) == []
-    assert [tool.name for tool in tools.get_available()] == ["current"]
+    assert [schema.name for schema in tools.get_schema()] == ["current"]
 
     with pytest.raises(ValueError, match="not a valid ToolSchemaFormat"):
         tools.get_schema("invalid")

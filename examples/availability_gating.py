@@ -10,7 +10,7 @@ class UserInfo:
     is_admin: bool = False
 
 
-tools = Tools()
+tools = Tools(context=ToolContext(UserInfo(name="Mathis")))
 
 
 # Hidden entirely unless a UserInfo dependency is present in the context.
@@ -29,14 +29,17 @@ def delete_account() -> str:
     return "account deleted"
 
 
+def tool_names(context: ToolContext | None = None) -> list[str]:
+    return [schema.name for schema in tools.get_schema(context=context)]
+
+
 async def main() -> None:
-    print("no context:", [tool.name for tool in tools.get_available()])
+    # The registry context set at construction time.
+    print("regular user:", tool_names())
 
-    tools.set_context(ToolContext(UserInfo(name="Mathis")))
-    print("regular user:", [tool.name for tool in tools.get_available()])
-
-    tools.set_context(ToolContext(UserInfo(name="Mathis", is_admin=True)))
-    print("admin:", [tool.name for tool in tools.get_available()])
+    # A per-call context overrides it without mutating the registry.
+    print("no context:", tool_names(ToolContext()))
+    print("admin:", tool_names(ToolContext(UserInfo(name="Mathis", is_admin=True))))
 
 
 if __name__ == "__main__":

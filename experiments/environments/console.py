@@ -52,7 +52,9 @@ class Console:
 
     def print_tools(self) -> None:
         print("Registered tools (available in current context):")
-        for tool in self._tools.get_available():
+        for tool in self._tools:
+            if not tool.is_available(self._context):
+                continue
             flags = []
             if tool.requires_approval:
                 flags.append("requires_approval")

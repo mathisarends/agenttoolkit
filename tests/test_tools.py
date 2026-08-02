@@ -154,8 +154,7 @@ def test_context_controls_availability_and_description() -> None:
     assert tool.resolve_description() == "Search"
     assert tools.get_schema() == []
 
-    tools.set_context(ToolContext(SearchClient("kb:")))
-    schemas = tools.get_schema()
+    schemas = tools.get_schema(context=ToolContext(SearchClient("kb:")))
     assert schemas[0].description == "Search with prefix kb:"
 
 

@@ -83,14 +83,6 @@ class Tools:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
-    def set_context(self, context: ToolContext | None) -> None:
-        self._context = context
-
-    def get_available(self) -> list[Tool]:
-        return [
-            tool for tool in self._tools.values() if tool.is_available(self._context)
-        ]
-
     @overload
     def get_schema(
         self,

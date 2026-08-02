@@ -28,8 +28,8 @@ def create_issue(title: str) -> str:
 async def main() -> None:
     print(tools.get_schema()[0].description)
 
-    tools.set_context(ToolContext(Project(name="agenttoolkit")))
-    print(tools.get_schema()[0].description)
+    context = ToolContext(Project(name="agenttoolkit"))
+    print(tools.get_schema(context=context)[0].description)
 
 
 if __name__ == "__main__":

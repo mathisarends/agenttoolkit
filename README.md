@@ -191,8 +191,14 @@ argument schema:
 
 ```python
 context = ToolContext(SearchClient(), some_other_service)
-tools.set_context(context)
+tools = Tools(context=context)
 ```
+
+The context is known up front, so it belongs in the constructor. Dependencies
+that only materialise later go through `context.provide(...)` on the instance
+you already handed over; a context that differs per request goes through the
+`context=` argument on `execute(...)`, `get_schema(...)` and
+`create_action_model(...)`, which leaves the registry context untouched.
 
 `ToolContext.resolve(T)` returns the most recently provided instance of type
 `T` (or a subclass), searching in reverse insertion order. Useful mutators:
@@ -268,10 +274,10 @@ else:
     result = await tools.execute(name, arguments, context=context)
 ```
 
-`Tools.get_available()` returns the underlying `Tool` objects for the active
-registry context instead of schemas — handy for printing a catalog of what's
-currently exposed (`tool.name`, `tool.resolve_description(context)`,
-`tool.effects`, ...).
+Iterating a `Tools` instance yields the underlying `Tool` objects — every
+registered one, gated or not. Filter with `tool.is_available(context)` to print
+a catalog of what a given context actually exposes (`tool.name`,
+`tool.resolve_description(context)`, `tool.effects`, ...).
 
 ## Results (`ActionResult`)
 
@@ -520,8 +526,8 @@ tools = Tools(
 ```
 
 The registry is resolved from the call's `ToolContext`, not captured at
-construction — swapping the context via `set_context(...)` or a per-call
-`context=` argument refreshes the registry actually in use, and the
+construction — a per-call `context=` argument refreshes the registry
+actually in use, and the
 middleware is a no-op when the context holds no `Skills`.
 
 Pass `when=` to select tools by any other predicate over the `Tool`, e.g.
