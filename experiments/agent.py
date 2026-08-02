@@ -12,7 +12,7 @@ from llmify import (
 )
 from pydantic import BaseModel
 
-from agenttoolkit.tools import ActionResult, Tools, ToolSchemaFormat
+from agenttoolkit.tools import Tools, ToolSchemaFormat
 
 
 def _json_default(value: Any) -> Any:
@@ -22,7 +22,7 @@ def _json_default(value: Any) -> Any:
 
 
 OnToolCall = Callable[[str, dict[str, Any]], None]
-OnToolResult = Callable[[str, ActionResult[object]], None]
+OnToolResult = Callable[[str, object], None]
 
 
 class Agent:
@@ -98,21 +98,16 @@ class Agent:
                     and self._confirm is not None
                     and not self._confirm(call.function.name, arguments)
                 ):
-                    result = ActionResult[object].fail("Declined by user")
+                    result = "Tool failed: Declined by user"
                 else:
                     result = await self._tools.execute(call.function.name, arguments)
 
                 if self._on_tool_result:
                     self._on_tool_result(call.function.name, result)
 
-                payload = (
-                    {"ok": True, "result": result.result}
-                    if result.ok
-                    else {"ok": False, "error": result.error}
-                )
                 self._messages.append(
                     ToolResultMessage(
                         tool_call_id=call.id,
-                        content=json.dumps(payload, default=_json_default),
+                        content=json.dumps(result, default=_json_default),
                     )
                 )

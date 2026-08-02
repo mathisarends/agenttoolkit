@@ -3,7 +3,7 @@ from pathlib import PurePosixPath
 from pydantic import BaseModel, Field
 
 from agenttoolkit import Skills
-from agenttoolkit.tools import ActionResult, Inject, Tools
+from agenttoolkit.tools import Inject, Tools
 
 
 class LoadSkillParams(BaseModel):
@@ -25,13 +25,11 @@ def register_skill_loader(
     def load_skill(
         params: LoadSkillParams,
         skills: Inject[Skills],
-    ) -> ActionResult[object]:
+    ) -> dict[str, object]:
         loaded = skills.load(params.name)
-        return ActionResult[object].success(
-            {
-                "name": loaded.name,
-                "instructions": loaded.instructions,
-                "directory": str(root / loaded.name),
-                "resources": list(loaded.resources),
-            }
-        )
+        return {
+            "name": loaded.name,
+            "instructions": loaded.instructions,
+            "directory": str(root / loaded.name),
+            "resources": list(loaded.resources),
+        }

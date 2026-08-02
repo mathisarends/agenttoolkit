@@ -5,7 +5,6 @@ import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 from agenttoolkit import (
-    ActionResult,
     Inject,
     ToolContext,
     ToolEffect,
@@ -47,7 +46,7 @@ async def test_register_validate_inject_and_execute() -> None:
     result = await tools.execute("search", {"query": "docs"})
     tool = tools.get("search")
 
-    assert result == ActionResult.success("found:docs:10")
+    assert result == "found:docs:10"
     assert tool is not None
     assert tool.effects == frozenset({ToolEffect.NETWORK})
     assert tool.has_effect(ToolEffect.NETWORK)
@@ -63,11 +62,12 @@ async def test_plain_signature_is_validated_and_sync_result_is_returned() -> Non
     def add(a: int, b: int = 1) -> int:
         return a + b
 
-    assert await tools.execute("add", {"a": "2"}) == ActionResult[int].success(3)
+    assert await tools.execute("add", {"a": "2"}) == 3
 
     invalid = await tools.execute("add", {})
-    assert not invalid.ok
-    assert "a" in (invalid.error or "")
+    assert isinstance(invalid, str)
+    assert invalid.startswith("Tool failed: ")
+    assert "a" in invalid
 
 
 def test_schema_is_provider_neutral_with_adapters() -> None:
@@ -172,7 +172,7 @@ async def test_tool_errors_are_logged_and_returned_by_the_boundary(
         result = await tools.execute("internal_failure")
 
     assert "Tool 'internal_failure' failed" in caplog.text
-    assert result == ActionResult.fail("Internal tool error.")
+    assert result == "Tool failed: secret"
 
 
 def test_duplicate_registration_and_status_validation() -> None:

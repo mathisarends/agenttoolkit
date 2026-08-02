@@ -6,7 +6,6 @@ from .skills import (
     parse_skill,
 )
 from .tools import (
-    ActionResult,
     Inject,
     SkillRefreshMiddleware,
     Tool,
@@ -28,7 +27,6 @@ from .tools import (
 )
 
 __all__ = [
-    "ActionResult",
     "Inject",
     "LoadedSkill",
     "Skill",

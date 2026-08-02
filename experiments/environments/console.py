@@ -4,7 +4,7 @@ from typing import Any
 
 from llmify import RetryableError, RetryEvent
 
-from agenttoolkit.tools import ActionResult, Tool, ToolContext, Tools
+from agenttoolkit.tools import Tool, ToolContext, Tools
 from experiments.agent import Agent
 
 # Second line of defence behind llmify's own retries: those cover a burst of a
@@ -33,12 +33,9 @@ class Console:
     def on_tool_result(
         self,
         name: str,
-        result: ActionResult[object],
+        result: object,
     ) -> None:
-        if result.ok:
-            print(f"  <- {name}:\n{result.result}")
-        else:
-            print(f"  <- {name} FAILED:\n{result.error}")
+        print(f"  <- {name}:\n{result}")
 
     def on_retry(self, event: RetryEvent) -> None:
         print(

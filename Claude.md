@@ -9,8 +9,6 @@
   not relative imports (`from .context import ToolContext`). The one
   exception is `__init__.py` files, which use relative imports to re-export
   their package's public API.
-- No comments or docstrings that just restate what the code does (e.g. a
-  docstring on `ActionResult` saying "Provider-neutral outcome of one tool
-  invocation" — the name and fields already say that). Only write one when
-  it explains something non-obvious: why it exists, a hidden constraint, or
-  a behavior that would otherwise surprise a reader.
+- No comments or docstrings that just restate what the code does. Only write
+  one when it explains something non-obvious: why it exists, a hidden
+  constraint, or a behavior that would otherwise surprise a reader.

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from agenttoolkit.builtins.shell import CommandRunner
-from agenttoolkit.tools import ActionResult, Inject, ToolEffect, Tools
+from agenttoolkit.tools import Inject, ToolEffect, Tools
 
 
 class ShellParams(BaseModel):
@@ -30,11 +30,11 @@ def register_shell_tool(
     async def run_shell(
         params: ShellParams,
         runner: Inject[CommandRunner],
-    ) -> ActionResult:
+    ) -> str:
         result = await runner.execute(params.command)
         if not result.ok:
-            return ActionResult.fail(
+            raise RuntimeError(
                 f"exit={result.returncode} timed_out={result.timed_out}\n"
                 f"{result.output}"
             )
-        return ActionResult.success(result.output)
+        return result.output

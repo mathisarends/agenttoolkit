@@ -59,7 +59,7 @@ class Tool:
         self,
         name: str,
         description: str | ToolDescription,
-        fn: Callable,
+        fn: Callable[..., object],
         *,
         param_model: type[BaseModel] | None = None,
         parameters: Mapping[str, Any] | None = None,
@@ -135,7 +135,7 @@ class Tool:
         params = self.input_model.model_validate(raw_arguments)
         return params.model_dump(mode="python")
 
-    async def execute(self, arguments: dict[str, Any]) -> Any:
+    async def execute(self, arguments: dict[str, Any]) -> object:
         result = self.fn(**arguments)
         return await result if inspect.isawaitable(result) else result
 

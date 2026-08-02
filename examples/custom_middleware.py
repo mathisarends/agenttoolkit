@@ -3,11 +3,10 @@ import time
 
 from agenttoolkit import Tools
 from agenttoolkit.tools.middleware import ToolCall, ToolHandler, ToolMiddleware
-from agenttoolkit.tools.results import ActionResult
 
 
 class TimingMiddleware(ToolMiddleware):
-    async def __call__(self, call: ToolCall, next: ToolHandler) -> ActionResult[object]:
+    async def __call__(self, call: ToolCall, next: ToolHandler) -> object:
         started = time.perf_counter()
         result = await next(call)
         elapsed_ms = (time.perf_counter() - started) * 1000

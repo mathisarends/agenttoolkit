@@ -13,12 +13,10 @@ from .middleware import (
     ToolPredicate,
 )
 from .models import Tool, ToolEffect, ToolMetadata, ToolSchemaFormat
-from .results import ActionResult
 from .schema import ToolSchema, build_schema
 from .tools import Tools
 
 __all__ = [
-    "ActionResult",
     "Inject",
     "SkillRefreshMiddleware",
     "Tool",

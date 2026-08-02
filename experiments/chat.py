@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 from agenttoolkit.tools import (
-    ActionResult,
     Inject,
     ToolContext,
     Tools,
@@ -85,17 +84,14 @@ def delete_all_data() -> str:
     return "all demo data deleted"
 
 
-# 7. Tool that can raise — demonstrates ActionResult.fail via the built-in
-#    error boundary middleware instead of crashing the agent loop.
+# 7. Tool that can raise; the built-in error boundary returns the error text
+#    to the agent instead of crashing the loop.
 @tools.action("Divide two numbers; fails on division by zero")
 def divide(a: float, b: float) -> float:
     return a / b
 
 
-# 8. Tool that builds its own typed ActionResult[ResultT] instead of letting
-#    Tools wrap a plain return value. `result.result` is statically typed as
-#    `WeatherResult | None` for callers, and `error` is populated on failure
-#    instead of an exception propagating.
+# 8. Structured values pass through the tool pipeline unchanged.
 _KNOWN_CITIES = {"berlin": 18.0, "hamburg": 15.5, "muenchen": 21.0}
 
 
@@ -104,15 +100,12 @@ class WeatherResult(BaseModel):
     temp_c: float
 
 
-WeatherActionResult = ActionResult[WeatherResult]
-
-
 @tools.action("Get the current weather for a known city")
-def get_weather(city: str) -> WeatherActionResult:
+def get_weather(city: str) -> WeatherResult:
     temp_c = _KNOWN_CITIES.get(city.lower())
     if temp_c is None:
-        return WeatherActionResult.fail(f"Unknown city: {city!r}")
-    return WeatherActionResult.success(WeatherResult(city=city, temp_c=temp_c))
+        raise ValueError(f"Unknown city: {city!r}")
+    return WeatherResult(city=city, temp_c=temp_c)
 
 
 async def main() -> None:

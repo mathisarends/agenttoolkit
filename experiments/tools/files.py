@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
-from agenttoolkit.builtins.fs import Workspace, WorkspaceError
-from agenttoolkit.tools import ActionResult, Inject, ToolEffect, Tools
+from agenttoolkit.builtins.fs import Workspace
+from agenttoolkit.tools import Inject, ToolEffect, Tools
 
 
 class ReadFileParams(BaseModel):
@@ -33,11 +33,8 @@ def register_file_tools(tools: Tools) -> None:
     async def read_file(
         params: ReadFileParams,
         workspace: Inject[Workspace],
-    ) -> ActionResult:
-        try:
-            return ActionResult.success(await workspace.read_file(params.path))
-        except (OSError, UnicodeError, WorkspaceError) as error:
-            return ActionResult.fail(error)
+    ) -> str:
+        return await workspace.read_file(params.path)
 
     @tools.action(
         "Write the complete UTF-8 content of a file in the workspace. "
@@ -49,12 +46,9 @@ def register_file_tools(tools: Tools) -> None:
     async def write_file(
         params: WriteFileParams,
         workspace: Inject[Workspace],
-    ) -> ActionResult:
-        try:
-            await workspace.write_file(params.path, params.content)
-        except (OSError, UnicodeError, WorkspaceError) as error:
-            return ActionResult.fail(error)
-        return ActionResult.success(f"Wrote {params.path}")
+    ) -> str:
+        await workspace.write_file(params.path, params.content)
+        return f"Wrote {params.path}"
 
     @tools.action(
         "Replace exact text in a UTF-8 file in the workspace. By default the "
@@ -66,16 +60,11 @@ def register_file_tools(tools: Tools) -> None:
     async def edit_file(
         params: EditFileParams,
         workspace: Inject[Workspace],
-    ) -> ActionResult:
-        try:
-            replacements = await workspace.edit_file(
-                params.path,
-                params.old,
-                params.new,
-                replace_all=params.replace_all,
-            )
-        except (OSError, UnicodeError, WorkspaceError) as error:
-            return ActionResult.fail(error)
-        return ActionResult.success(
-            f"Replaced {replacements} occurrence(s) in {params.path}"
+    ) -> str:
+        replacements = await workspace.edit_file(
+            params.path,
+            params.old,
+            params.new,
+            replace_all=params.replace_all,
         )
+        return f"Replaced {replacements} occurrence(s) in {params.path}"

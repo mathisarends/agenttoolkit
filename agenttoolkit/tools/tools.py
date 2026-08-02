@@ -19,7 +19,6 @@ from agenttoolkit.tools.models import (
     ToolMetadata,
     ToolSchemaFormat,
 )
-from agenttoolkit.tools.results import ActionResult
 from agenttoolkit.tools.schema import ToolSchema
 
 
@@ -29,17 +28,15 @@ class Tools:
         *,
         context: ToolContext | None = None,
         middleware: Sequence[ToolMiddleware] | None = None,
-        result_type: type[ActionResult[object]] = ActionResult[object],
     ) -> None:
         self._tools: dict[str, Tool] = {}
         self._context = context
-        self._result_type = result_type
         self._handler = compose(
-            default_chain(self._tools, result_type, middleware),
+            default_chain(self._tools, middleware),
             self._invoke,
         )
 
-    def action[ParamsT: BaseModel](
+    def action[ParamsT: BaseModel, **CallT, ResultT](
         self,
         description: str | ToolDescription,
         name: str | None = None,
@@ -51,8 +48,13 @@ class Tools:
         available_when: ToolAvailability | None = None,
         tags: Sequence[str] = (),
         metadata: Mapping[str, Any] | None = None,
-    ) -> Callable:
-        def decorator(func: Callable) -> Callable:
+    ) -> Callable[
+        [Callable[CallT, ResultT]],
+        Callable[CallT, ResultT],
+    ]:
+        def decorator(
+            func: Callable[CallT, ResultT],
+        ) -> Callable[CallT, ResultT]:
             function_name = getattr(func, "__name__", type(func).__name__)
             self._register(
                 Tool(
@@ -177,7 +179,7 @@ class Tools:
         arguments: Mapping[str, Any] | None = None,
         *,
         context: ToolContext | None = None,
-    ) -> ActionResult[object]:
+    ) -> object:
         return await self._handler(
             ToolCall(
                 name=name,
@@ -196,13 +198,8 @@ class Tools:
     def __len__(self) -> int:
         return len(self._tools)
 
-    async def _invoke(self, call: ToolCall) -> ActionResult[object]:
+    async def _invoke(self, call: ToolCall) -> object:
         if call.tool is None or call.params is None:
             raise RuntimeError("Tool pipeline did not resolve and validate the call")
         arguments = resolve_arguments(call.tool, call.params, call.context)
-        result = await call.tool.execute(arguments)
-        return (
-            result
-            if isinstance(result, ActionResult)
-            else self._result_type.success(result)
-        )
+        return await call.tool.execute(arguments)

@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit import (
-    ActionResult,
     SkillRefreshMiddleware,
     Skills,
     ToolContext,
@@ -53,7 +52,7 @@ async def test_writing_tool_refreshes_and_returns_new_catalog(tmp_path: Path) ->
 
     result = await tools.execute("write_skill")
 
-    assert result == ActionResult.success("written")
+    assert result == "written"
     assert skills.names() == ["created", "existing"]
     assert skills.revision == 1
 
@@ -76,7 +75,7 @@ async def test_tool_without_write_effect_does_not_refresh_registry(
 
     result = await tools.execute("other_tool")
 
-    assert result == ActionResult.success("written")
+    assert result == "written"
     assert skills.names() == ["existing"]
 
 
@@ -98,7 +97,7 @@ async def test_custom_predicate_selects_tools(tmp_path: Path) -> None:
 
     result = await tools.execute("write_skill")
 
-    assert result == ActionResult.success("written")
+    assert result == "written"
     assert skills.names() == ["created", "existing"]
 
 
@@ -125,7 +124,7 @@ async def test_invalid_edit_reports_error_and_keeps_active_registry(
     with caplog.at_level(logging.ERROR):
         result = await tools.execute("write_skill")
 
-    assert result == ActionResult.success("written")
+    assert result == "written"
     assert skills.names() == ["existing"]
     assert skills.revision == 0
     assert "Skill refresh failed after tool 'write_skill'" in caplog.text
@@ -144,13 +143,13 @@ async def test_failed_writing_tool_still_reports_catalog_update(
     )
 
     @tools.action("Write and fail", effects=(ToolEffect.WRITES_WORKSPACE,))
-    def write_skill() -> ActionResult:
+    def write_skill() -> None:
         make_skill(tmp_path, "created")
-        return ActionResult.fail("command failed")
+        raise RuntimeError("command failed")
 
     result = await tools.execute("write_skill")
 
-    assert result == ActionResult.fail("command failed")
+    assert result == "Tool failed: command failed"
     assert skills.names() == ["created", "existing"]
 
 
@@ -162,7 +161,7 @@ async def test_context_without_skills_makes_the_middleware_a_no_op() -> None:
     def write_file() -> str:
         return "written"
 
-    assert await tools.execute("write_file") == ActionResult.success("written")
+    assert await tools.execute("write_file") == "written"
 
 
 @pytest.mark.asyncio

@@ -17,7 +17,7 @@ it is a building block, not a framework.
 - [Dependency injection with `ToolContext`](#dependency-injection-with-toolcontext)
 - [Conditional availability and descriptions](#conditional-availability-and-descriptions)
 - [Driving an agent loop](#driving-an-agent-loop)
-- [Results (`ActionResult`)](#results-actionresult)
+- [Results and errors](#results-and-errors)
 - [Middleware](#middleware)
 - [Merging registries](#merging-registries)
 - [Filesystem and shell primitives](#filesystem-and-shell-primitives)
@@ -40,8 +40,8 @@ it is a building block, not a framework.
   logging) that applications can extend or replace.
 - Thin, dependency-free schema adapters for OpenAI and Anthropic tool-call
   formats.
-- Generic `ActionResult` type so applications can add project-specific
-  result fields without falling back to `Any`.
+- Tool implementations return their natural Python values; the execution
+  pipeline does not impose an application-specific result envelope.
 - Async filesystem and shell ports with local, Docker, and Bubblewrap
   implementations for common agent capabilities.
 - Local Agent Skills discovery and progressive loading, compatible with the
@@ -66,7 +66,7 @@ makes, and feed the result back:
 ```python
 from pydantic import BaseModel, Field
 
-from agenttoolkit import ActionResult, Inject, ToolContext, Tools, ToolSchemaFormat
+from agenttoolkit import Inject, ToolContext, Tools, ToolSchemaFormat
 
 
 class SearchParams(BaseModel):
@@ -95,20 +95,17 @@ async def search(params: SearchParams, client: Inject[SearchClient]) -> list[str
 schema = tools.get_schema(ToolSchemaFormat.ANTHROPIC)
 
 # 2. The model asks to call "search" with {"query": "tool middleware"}.
-result: ActionResult[object] = await tools.execute(
+result: object = await tools.execute(
     "search", {"query": "tool middleware"}
 )
 
-# 3. Feed the outcome back to the model.
-if result.ok:
-    matches = result.result
-else:
-    error_message = result.error
+# 3. Serialize the value and feed it back to the model.
 ```
 
-`tools.execute(...)` never raises for expected failures — an unknown tool
-name, invalid arguments, or an exception inside the tool all come back as a
-failed `ActionResult`, ready to hand to the model as-is.
+`tools.execute(...)` never raises for expected failures: an unknown tool name,
+invalid arguments, or an exception inside the tool all come back as an
+agent-readable `"Tool failed: ..."` string. The full exception is logged by
+the error-boundary middleware.
 
 ## Defining tools
 
@@ -210,8 +207,8 @@ context.clear()                 # remove everything
 ```
 
 If an `Inject[T]` parameter has no default and no matching dependency is
-found in context, execution raises `ValueError` rather than silently
-passing `None`.
+found in context, execution returns an agent-readable failure rather than
+silently passing `None`.
 
 ## Conditional availability and descriptions
 
@@ -268,7 +265,7 @@ status while a call is in flight:
 ```python
 tool = tools.get(name)
 if tool is not None and tool.requires_approval and not confirm(name, arguments):
-    result = ActionResult[object].fail("Declined by user")
+    result = "Tool failed: Declined by user"
 else:
     print(tool.format_status(arguments) if tool else name)
     result = await tools.execute(name, arguments, context=context)
@@ -279,62 +276,35 @@ registered one, gated or not. Filter with `tool.is_available(context)` to print
 a catalog of what a given context actually exposes (`tool.name`,
 `tool.resolve_description(context)`, `tool.effects`, ...).
 
-## Results (`ActionResult`)
+## Results and errors
+
+Tool functions return their natural Python value: text, numbers, collections,
+Pydantic models, or `None`. `Tools.execute()` passes that value through
+unchanged:
 
 ```python
-class ActionResult[ResultT = str](BaseModel):
-    ok: bool
-    result: ResultT | None = None
-    error: str | None = None
-```
-
-`ResultT` defaults to `str`, the common case for a tool that hands text
-back to the model. A bare `ActionResult` therefore *is* `ActionResult[str]`
-and validates as one — `ActionResult.success(3)` raises. Payloads of any
-other type must parametrize explicitly.
-
-Raw tool return values are wrapped as successful results automatically. A
-tool may instead return an `ActionResult` directly — e.g. to fail without
-raising, or to populate a typed result:
-
-```python
-def run_command(command: str) -> ActionResult:  # ActionResult[str]
-    result = shell(command)
-    if not result.ok:
-        return ActionResult.fail(result.output)
-    return ActionResult.success(result.output)
-```
-
-```python
-WeatherActionResult = ActionResult[WeatherResult]
+class WeatherResult(BaseModel):
+    city: str
+    temp_c: float
 
 
-def get_weather(city: str) -> WeatherActionResult:
+@tools.action("Get the current weather for a known city")
+def get_weather(city: str) -> WeatherResult:
     temp_c = KNOWN_CITIES.get(city.lower())
     if temp_c is None:
-        return WeatherActionResult.fail(f"Unknown city: {city!r}")
-    return WeatherActionResult.success(WeatherResult(city=city, temp_c=temp_c))
+        raise ValueError(f"Unknown city: {city!r}")
+    return WeatherResult(city=city, temp_c=temp_c)
 ```
 
-Because tool dispatch by name is dynamic and a registry can contain
-heterogeneous return types, `Tools.execute()` always returns
-`ActionResult[object]`; narrow `result` at the call site, or return a
-specialized `ActionResult` directly from the tool as above.
+Exceptions from resolution, validation, middleware, dependency injection, or
+the tool itself are logged and converted by the outer error boundary to an
+agent-readable string prefixed with `"Tool failed: "`. Consequently tool
+implementations need no toolkit-specific result import.
 
-`ActionResult` rejects unknown fields. When an application needs additional
-result fields (trace IDs, citations, usage info), define them in a typed
-subclass and wire it up via `Tools(result_type=...)` — every result the
-middleware chain produces (validation failures, unknown-tool errors, the
-internal-error fallback) is then built through that subclass too:
-
-```python
-class ProjectActionResult[ResultT = str](ActionResult[ResultT]):
-    trace_id: str | None = None
-    citations: tuple[str, ...] = ()
-
-
-tools = Tools(result_type=ProjectActionResult[object])
-```
+Because dispatch by name is dynamic and one registry can contain heterogeneous
+return types, the static return type of `Tools.execute()` is `object`. The
+application's provider adapter owns serialization and can add any
+provider-specific metadata at that boundary.
 
 ## Middleware
 

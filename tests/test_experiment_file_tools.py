@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit.builtins.fs import LocalWorkspace
-from agenttoolkit.tools import ActionResult, ToolContext, ToolEffect, Tools
+from agenttoolkit.tools import ToolContext, ToolEffect, Tools
 from experiments.tools import register_file_tools
 
 
@@ -29,11 +29,9 @@ async def test_file_tools_read_write_and_edit_workspace_files(
         },
     )
 
-    assert written == ActionResult.success("Wrote notes/message.txt")
-    assert read == ActionResult.success("hello world")
-    assert edited == ActionResult.success(
-        "Replaced 1 occurrence(s) in notes/message.txt"
-    )
+    assert written == "Wrote notes/message.txt"
+    assert read == "hello world"
+    assert edited == "Replaced 1 occurrence(s) in notes/message.txt"
     assert await workspace.read_file("notes/message.txt") == "hello agent"
 
 
@@ -49,10 +47,10 @@ async def test_file_tools_return_actionable_workspace_errors(tmp_path: Path) -> 
         {"path": "../outside.txt", "content": "no"},
     )
 
-    assert not missing.ok
-    assert "missing.txt" in (missing.error or "")
-    assert not outside.ok
-    assert "outside workspace" in (outside.error or "")
+    assert isinstance(missing, str)
+    assert "missing.txt" in missing
+    assert isinstance(outside, str)
+    assert "outside workspace" in outside
 
 
 def test_file_tools_expose_expected_metadata() -> None:
