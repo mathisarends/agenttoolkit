@@ -3,8 +3,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
+from typing import Literal
 
 type PathInput = Path | str | os.PathLike[str]
+type CommandTimeout = float | Literal["default"] | None
+
+DEFAULT_TIMEOUT: Literal["default"] = "default"
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +19,21 @@ class CommandLimits:
     def __post_init__(self) -> None:
         _positive("timeout_seconds", self.timeout_seconds)
         _positive("max_output_bytes", self.max_output_bytes)
+
+
+def resolve_timeout(
+    requested: CommandTimeout,
+    configured: float | None,
+) -> float | None:
+    """Resolve a per-call timeout against the runner's configured default.
+
+    Omitting a timeout (or passing ``"default"``) uses the configured value.
+    Passing ``None`` explicitly disables the timeout for that call.
+    """
+    if requested == DEFAULT_TIMEOUT:
+        return configured
+    _positive("timeout", requested)
+    return requested
 
 
 @dataclass(frozen=True, slots=True, init=False)

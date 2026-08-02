@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from agenttoolkit.builtins.shell import (
     BindMount,
     CommandDefaults,
-    DockerNetworkMode,
     DockerSandbox,
     SandboxPolicy,
 )
@@ -55,7 +54,7 @@ def connected_sandbox(
         mounts=(*mounts, *spogo_mounts),
         inherit_environment=_CONNECTED_ENVIRONMENT,
         user="host",
-        network_mode=DockerNetworkMode.HOST,
+        network_mode="host",
         shell="/bin/bash",
     )
 

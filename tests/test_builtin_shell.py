@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path, PurePosixPath
-from typing import cast
 
 import pytest
 
@@ -14,7 +13,6 @@ from agenttoolkit.builtins.shell import (
     CommandResult,
     CommandRunner,
     CommandUnavailableError,
-    DockerNetworkMode,
     DockerSandbox,
     DockerSandboxStateError,
     LocalShellRunner,
@@ -228,6 +226,9 @@ async def test_local_shell_runner_timeout_errors_and_validation(
     assert result.timed_out
     assert not result.ok
 
+    no_timeout = await runner.execute("import time; time.sleep(0.02)", timeout=None)
+    assert no_timeout.ok
+
     with pytest.raises(ValueError, match="must not be empty"):
         await runner.execute("")
     with pytest.raises(ValueError, match="positive"):
@@ -322,12 +323,12 @@ def test_docker_supports_an_explicit_network_mode(tmp_path: Path) -> None:
         "cli:latest",
         defaults=CommandDefaults(tmp_path),
         policy=SandboxPolicy.for_workspace(tmp_path, enable_network_access=True),
-        network_mode=DockerNetworkMode.HOST,
+        network_mode="host",
     )
 
     argv = sandbox.build_open_argv(container_name="test-sandbox")
 
-    assert sandbox.network_mode is DockerNetworkMode.HOST
+    assert sandbox.network_mode == "host"
     assert ("--network", "host") == argv[
         argv.index("--network") : argv.index("--network") + 2
     ]
@@ -368,10 +369,10 @@ def test_docker_validates_convenience_configuration(
         DockerSandbox("image", inherit_environment=("BAD=NAME",))
     with pytest.raises(ValueError, match="user"):
         DockerSandbox("image", user=" ")
-    with pytest.raises(TypeError, match="DockerNetworkMode"):
-        DockerSandbox("image", network_mode=cast(DockerNetworkMode, "host"))
+    with pytest.raises(ValueError, match="'bridge' or 'host'"):
+        DockerSandbox("image", network_mode="invalid")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="requires network access"):
-        DockerSandbox("image", network_mode=DockerNetworkMode.HOST)
+        DockerSandbox("image", network_mode="host")
 
     monkeypatch.delenv("MISSING_CLI_TOKEN", raising=False)
     sandbox = DockerSandbox(

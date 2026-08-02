@@ -3,7 +3,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from agenttoolkit.builtins.shell.command import CommandResult, run_process
-from agenttoolkit.builtins.shell.execution import CommandDefaults
+from agenttoolkit.builtins.shell.execution import (
+    DEFAULT_TIMEOUT,
+    CommandDefaults,
+    CommandTimeout,
+    resolve_timeout,
+)
 
 
 class LocalShellRunner:
@@ -31,7 +36,7 @@ class LocalShellRunner:
         cwd: str | os.PathLike[str] | None = None,
         env: Mapping[str, str] | None = None,
         stdin: str | bytes | None = None,
-        timeout: float | None = None,
+        timeout: CommandTimeout = DEFAULT_TIMEOUT,
     ) -> CommandResult:
         if not command:
             raise ValueError("command must not be empty")
@@ -48,8 +53,9 @@ class LocalShellRunner:
             cwd=Path(selected_cwd),
             env=selected_env,
             stdin=stdin,
-            timeout=(
-                self._defaults.limits.timeout_seconds if timeout is None else timeout
+            timeout=resolve_timeout(
+                timeout,
+                self._defaults.limits.timeout_seconds,
             ),
             max_output_bytes=self._defaults.limits.max_output_bytes,
             spill_directory=self._defaults.spill_directory,

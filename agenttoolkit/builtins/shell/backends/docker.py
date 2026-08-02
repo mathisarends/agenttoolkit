@@ -3,10 +3,9 @@ import os
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import TracebackType
-from typing import Self
+from typing import Literal, Self
 
 from agenttoolkit.builtins.shell.command import (
     CommandError,
@@ -14,13 +13,15 @@ from agenttoolkit.builtins.shell.command import (
     CommandUnavailableError,
     run_process,
 )
-from agenttoolkit.builtins.shell.execution import CommandDefaults
+from agenttoolkit.builtins.shell.execution import (
+    DEFAULT_TIMEOUT,
+    CommandDefaults,
+    CommandTimeout,
+    resolve_timeout,
+)
 from agenttoolkit.builtins.shell.policy import SandboxPolicy
 
-
-class DockerNetworkMode(StrEnum):
-    BRIDGE = "bridge"
-    HOST = "host"
+type DockerNetworkMode = Literal["bridge", "host"]
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -100,8 +101,8 @@ class DockerSandbox:
             raise ValueError("user must not be empty")
         self._user = user
         if network_mode is not None:
-            if not isinstance(network_mode, DockerNetworkMode):
-                raise TypeError("network mode must be a DockerNetworkMode")
+            if network_mode not in ("bridge", "host"):
+                raise ValueError("network mode must be 'bridge' or 'host'")
             if not self._policy.enable_network_access:
                 raise ValueError(
                     "network mode requires network access to be enabled by policy"
@@ -113,6 +114,9 @@ class DockerSandbox:
         self._container_name: str | None = None
         self._active_mounts: tuple[tuple[Path, PurePosixPath, bool], ...] | None = None
         self._operation_lock = asyncio.Lock()
+        self._active_commands = 0
+        self._commands_idle = asyncio.Event()
+        self._commands_idle.set()
         self._is_open = False
 
     @property
@@ -189,6 +193,7 @@ class DockerSandbox:
             if container_name is None:
                 self._clear_container_state()
                 return
+            await self._commands_idle.wait()
             try:
                 await self._remove_container(container_name)
             except asyncio.CancelledError:
@@ -216,7 +221,7 @@ class DockerSandbox:
         cwd: str | os.PathLike[str] | None = None,
         env: Mapping[str, str] | None = None,
         stdin: str | bytes | None = None,
-        timeout: float | None = None,
+        timeout: CommandTimeout = DEFAULT_TIMEOUT,
     ) -> CommandResult:
         if not command:
             raise ValueError("command must not be empty")
@@ -231,6 +236,9 @@ class DockerSandbox:
                 env=env,
                 interactive=stdin is not None,
             )
+            self._active_commands += 1
+            self._commands_idle.clear()
+        try:
             try:
                 result = await run_process(
                     argv,
@@ -238,10 +246,9 @@ class DockerSandbox:
                     cwd=None,
                     env=None,
                     stdin=stdin,
-                    timeout=(
-                        self._defaults.limits.timeout_seconds
-                        if timeout is None
-                        else timeout
+                    timeout=resolve_timeout(
+                        timeout,
+                        self._defaults.limits.timeout_seconds,
                     ),
                     max_output_bytes=self._defaults.limits.max_output_bytes,
                     spill_directory=self._defaults.spill_directory,
@@ -257,6 +264,10 @@ class DockerSandbox:
             if result.timed_out:
                 await self._discard_container(container_name)
             return result
+        finally:
+            self._active_commands -= 1
+            if self._active_commands == 0:
+                self._commands_idle.set()
 
     def build_open_argv(
         self,
@@ -317,7 +328,7 @@ class DockerSandbox:
             str(container_cwd),
         ]
         if self._network_mode is not None:
-            argv.extend(("--network", self._network_mode.value))
+            argv.extend(("--network", self._network_mode))
         elif not self._policy.enable_network_access:
             argv.extend(("--network", "none"))
         if selected_user := _resolve_user(self._user):

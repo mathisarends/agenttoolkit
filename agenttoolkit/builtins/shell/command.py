@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Protocol, runtime_checkable
 
+from agenttoolkit.builtins.shell.execution import DEFAULT_TIMEOUT, CommandTimeout
+
 
 class CommandError(Exception):
     pass
@@ -93,7 +95,7 @@ class CommandRunner(Protocol):
         cwd: str | os.PathLike[str] | None = None,
         env: Mapping[str, str] | None = None,
         stdin: str | bytes | None = None,
-        timeout: float | None = None,
+        timeout: CommandTimeout = DEFAULT_TIMEOUT,
     ) -> CommandResult: ...
 
 
