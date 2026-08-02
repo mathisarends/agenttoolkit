@@ -14,11 +14,11 @@ class TransferParams(BaseModel):
 
 # `status` renders a human-readable line for the arguments an agent is about
 # to call the tool with, before execution — handy for approval prompts and
-# activity logs. It accepts a "{field}" template string or a callable.
+# activity logs. It accepts a plain string or a callable taking the params.
 @tools.action(
     "Transfer money between accounts (needs confirmation)",
     params=TransferParams,
-    status="Transferring {amount} to {to}",
+    status=lambda params: f"Transferring {params.amount} to {params.to}",
     requires_approval=True,
 )
 def transfer(params: TransferParams) -> str:

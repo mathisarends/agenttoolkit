@@ -198,13 +198,13 @@ def test_per_call_context_does_not_replace_the_registry_context() -> None:
         tools.get_schema("invalid")
 
 
-def test_status_supports_templates_callables_and_missing_values() -> None:
-    template_tool = Tool(
-        "template",
-        "Template status",
+def test_status_supports_plain_strings_and_callables() -> None:
+    literal_tool = Tool(
+        "literal",
+        "Literal status",
         lambda params: None,
         param_model=StatusParams,
-        metadata=ToolMetadata(status="Processing {item}"),
+        metadata=ToolMetadata(status="Processing"),
     )
     callable_tool = Tool(
         "callable",
@@ -213,24 +213,16 @@ def test_status_supports_templates_callables_and_missing_values() -> None:
         param_model=StatusParams,
         metadata=ToolMetadata(status=lambda params: f"{params.item}:{params.count}"),
     )
-    params = StatusParams(item="document", count=2)
 
-    assert template_tool.format_status(params) == "Processing document"
-    assert template_tool.format_status({}) == "Processing {item}"
+    assert literal_tool.format_status(StatusParams(item="document", count=2)) == (
+        "Processing"
+    )
     assert callable_tool.format_status({"item": "document", "count": 2}) == (
         "document:2"
     )
 
 
-def test_status_requires_param_model_and_tool_name() -> None:
-    with pytest.raises(ValueError, match="status requires a param_model"):
-        Tool(
-            "invalid",
-            "Invalid status",
-            lambda: None,
-            metadata=ToolMetadata(status="Working"),
-        )
-
+def test_status_rejects_empty_tool_name() -> None:
     with pytest.raises(ValueError, match="cannot be empty"):
         Tool("", "Missing name", lambda: None)
 

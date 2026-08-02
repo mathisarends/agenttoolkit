@@ -27,7 +27,7 @@ def register_file_tools(tools: Tools) -> None:
     @tools.action(
         "Read a UTF-8 text file from the workspace.",
         params=ReadFileParams,
-        status="Reading {path}",
+        status=lambda params: f"Reading {params.path}",
     )
     async def read_file(
         params: ReadFileParams,
@@ -39,7 +39,7 @@ def register_file_tools(tools: Tools) -> None:
         "Write the complete UTF-8 content of a file in the workspace. "
         "Missing parent directories are created.",
         params=WriteFileParams,
-        status="Writing {path}",
+        status=lambda params: f"Writing {params.path}",
     )
     async def write_file(
         params: WriteFileParams,
@@ -52,7 +52,7 @@ def register_file_tools(tools: Tools) -> None:
         "Replace exact text in a UTF-8 file in the workspace. By default the "
         "old text must occur exactly once.",
         params=EditFileParams,
-        status="Editing {path}",
+        status=lambda params: f"Editing {params.path}",
     )
     async def edit_file(
         params: EditFileParams,

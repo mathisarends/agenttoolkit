@@ -98,7 +98,7 @@ tools = Tools(
 @tools.action(
     "Search the connected knowledge base.",
     params=SearchParams,
-    status="Searching for {query}...",
+    status=lambda params: f"Searching for {params.query}...",
 )
 async def search(params: SearchParams, client: Inject[SearchClient]) -> list[str]:
     return await client.search(params.query, params.limit)
@@ -156,10 +156,10 @@ None of `status`, `tags`, `requires_approval`, or `metadata` are
 visible to the model — they never appear in the generated JSON Schema. They
 exist for the host loop that dispatches the call:
 
-- `status` — a human-readable status message, either a `str.format`
-  template referencing parameter names or a callable. For callables, the
-  parameter type is inferred from `params`, providing type checking and IDE
-  navigation. Render it with `tool.format_status(args)` (e.g. to show
+- `status` — a human-readable status message, either a plain string or a
+  callable taking the parsed params. Prefer a callable: the parameter type
+  is inferred from `params`, giving type checking and IDE navigation.
+  Render it with `tool.format_status(args)` (e.g. to show
   "Refunding 20.0 for order o-123..." while the call runs).
 - `tags` — a `frozenset[str]` for grouping or filtering tools, readable as
   `tool.tags`.
@@ -178,8 +178,8 @@ tool.format_status({"order_id": "o-123", "amount": 20.0})
 # "Refunding 20.0 for order o-123..."
 ```
 
-String `status` templates are validated against `params` at registration
-time. Callable field access is checked statically by the IDE or type checker.
+A callable `status` gets its field access checked statically by the IDE or
+type checker; a plain string is rendered as-is.
 
 Prefer `tools.action(...)` for registering tools. Direct registration is an
 internal implementation detail.

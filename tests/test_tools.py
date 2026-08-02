@@ -197,13 +197,3 @@ def test_duplicate_registration_and_status_validation() -> None:
         @tools.action("Second")
         def duplicate() -> None:
             pass
-
-    with pytest.raises(ValueError, match="unknown placeholders"):
-
-        @tools.action(
-            "Search",
-            params=SearchParams,
-            status="Searching {missing}",
-        )
-        def bad_status(params: SearchParams) -> None:
-            pass

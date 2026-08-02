@@ -45,7 +45,7 @@ class AddParams(BaseModel):
 @tools.action(
     "Add two numbers together",
     params=AddParams,
-    status="Adding {a} + {b}",
+    status=lambda params: f"Adding {params.a} + {params.b}",
 )
 def add(params: AddParams) -> float:
     return params.a + params.b

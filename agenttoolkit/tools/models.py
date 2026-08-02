@@ -1,6 +1,5 @@
 import inspect
 import json
-import re
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -65,7 +64,6 @@ class Tool:
             if parameters is not None
             else self.input_model.model_json_schema(mode="validation")
         )
-        self._validate_status()
 
     @property
     def status(self) -> StatusFormatter[Any] | None:
@@ -119,39 +117,15 @@ class Tool:
         status = self.status
         if status is None:
             return None
-        if not isinstance(status, str):
-            model = (
-                args
-                if isinstance(args, BaseModel)
-                else self.input_model.model_validate(dict(args))
-            )
-            return status(model)
-
-        values = (
-            args.model_dump(exclude_none=True)
-            if isinstance(args, BaseModel)
-            else dict(args)
-        )
-        try:
-            return status.format(**values)
-        except KeyError:
+        if isinstance(status, str):
             return status
 
-    def _validate_status(self) -> None:
-        status = self.status
-        if status is None:
-            return
-        if self.param_model is None:
-            raise ValueError(f"Tool '{self.name}': status requires a param_model")
-        if callable(status):
-            return
-
-        placeholders = set(re.findall(r"\{(\w+)\}", status))
-        unknown = placeholders - set(self.param_model.model_fields)
-        if unknown:
-            raise ValueError(
-                f"Tool '{self.name}': status contains unknown placeholders: {unknown}"
-            )
+        model = (
+            args
+            if isinstance(args, BaseModel)
+            else self.input_model.model_validate(dict(args))
+        )
+        return status(model)
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Tool) and self.name == other.name

@@ -50,7 +50,7 @@ def register_background_shell_tools(
         "Start a command in the background and return a job ID immediately.",
         name="start_command",
         params=StartCommandParams,
-        status="Starting: {command}",
+        status=lambda params: f"Starting: {params.command}",
     )
     def start_command(params: StartCommandParams) -> dict[str, Any]:
         snapshot = jobs.start(
@@ -63,7 +63,7 @@ def register_background_shell_tools(
         "Poll a background command for status and output.",
         name="check_output",
         params=JobParams,
-        status="Checking command job {job_id}",
+        status=lambda params: f"Checking command job {params.job_id}",
     )
     def check_output(params: JobParams) -> dict[str, Any]:
         return _response(jobs.check_output(params.job_id))
@@ -72,7 +72,7 @@ def register_background_shell_tools(
         "Cancel a running background command.",
         name="cancel_command",
         params=JobParams,
-        status="Cancelling command job {job_id}",
+        status=lambda params: f"Cancelling command job {params.job_id}",
         requires_approval=True,
     )
     async def cancel_command(params: JobParams) -> dict[str, Any]:
