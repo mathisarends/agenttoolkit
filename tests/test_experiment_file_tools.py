@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit.builtins.fs import LocalWorkspace
-from agenttoolkit.tools import ToolContext, Tools, standard_middleware
+from agenttoolkit.tools import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
+    ToolContext,
+    Tools,
+)
 from experiments.tools import register_file_tools
 
 
@@ -40,7 +45,7 @@ async def test_file_tools_return_actionable_workspace_errors(tmp_path: Path) -> 
     workspace = LocalWorkspace(tmp_path)
     tools = Tools(
         context=ToolContext(workspace),
-        middleware=standard_middleware(),
+        middleware=(ErrorBoundaryMiddleware(), CallLoggingMiddleware()),
     )
     register_file_tools(tools)
 

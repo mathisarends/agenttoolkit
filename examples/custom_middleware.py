@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from agenttoolkit import Tools, standard_middleware
+from agenttoolkit import CallLoggingMiddleware, ErrorBoundaryMiddleware, Tools
 from agenttoolkit.tools.middleware import ToolCall, ToolHandler, ToolMiddleware
 
 
@@ -14,7 +14,13 @@ class TimingMiddleware(ToolMiddleware):
         return result
 
 
-tools = Tools(middleware=(*standard_middleware(), TimingMiddleware()))
+tools = Tools(
+    middleware=(
+        ErrorBoundaryMiddleware(),
+        CallLoggingMiddleware(),
+        TimingMiddleware(),
+    )
+)
 
 
 @tools.action("Simulate slow work")

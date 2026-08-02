@@ -10,8 +10,6 @@ from agenttoolkit.tools.models import Tool
 
 logger = logging.getLogger(__name__)
 
-type ToolPredicate = Callable[[Tool], bool]
-
 
 @dataclass(frozen=True, slots=True)
 class ToolCall:
@@ -61,14 +59,7 @@ class CallLoggingMiddleware(ToolMiddleware):
             logger.info("[tool] %s finished (%.0f ms)", call.name, elapsed_ms)
 
 
-def _all_tools(tool: Tool) -> bool:
-    return True
-
-
 class SkillRefreshMiddleware(ToolMiddleware):
-    def __init__(self, *, when: ToolPredicate = _all_tools) -> None:
-        self._when = when
-
     async def __call__(
         self,
         call: ToolCall,
@@ -77,7 +68,7 @@ class SkillRefreshMiddleware(ToolMiddleware):
         try:
             return await next(call)
         finally:
-            if call.tool is not None and self._when(call.tool):
+            if call.tool is not None:
                 skills = None if call.context is None else call.context.resolve(Skills)
                 if skills is not None:
                     try:
@@ -97,13 +88,6 @@ def compose(
     for middleware in reversed(middlewares):
         handler = _wrap(middleware, handler)
     return handler
-
-
-def standard_middleware() -> tuple[ToolMiddleware, ...]:
-    return (
-        ErrorBoundaryMiddleware(),
-        CallLoggingMiddleware(),
-    )
 
 
 def _wrap(middleware: ToolMiddleware, next_handler: ToolHandler) -> ToolHandler:

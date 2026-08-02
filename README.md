@@ -67,11 +67,12 @@ makes, and feed the result back:
 from pydantic import BaseModel, Field
 
 from agenttoolkit import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
     Inject,
     ToolContext,
     Tools,
     ToolSchemaFormat,
-    standard_middleware,
 )
 
 
@@ -87,7 +88,10 @@ class SearchClient:
 
 tools = Tools(
     context=ToolContext(SearchClient()),
-    middleware=standard_middleware(),
+    middleware=(
+        ErrorBoundaryMiddleware(),
+        CallLoggingMiddleware(),
+    ),
 )
 
 
@@ -111,10 +115,10 @@ result: object = await tools.execute(
 # 3. Serialize the value and feed it back to the model.
 ```
 
-Here `standard_middleware()` explicitly enables error handling and call
-logging. An unknown tool name, invalid arguments, or an exception inside the
-tool then comes back as an agent-readable `"Tool failed: ..."` string, while
-the full exception is logged.
+Here the application explicitly enables error handling and call logging. An
+unknown tool name, invalid arguments, or an exception inside the tool then
+comes back as an agent-readable `"Tool failed: ..."` string, while the full
+exception is logged.
 
 ## Defining tools
 
@@ -297,11 +301,11 @@ def get_weather(city: str) -> WeatherResult:
     return WeatherResult(city=city, temp_c=temp_c)
 ```
 
-With `standard_middleware()` enabled, exceptions from resolution, validation,
+With `ErrorBoundaryMiddleware` enabled, exceptions from resolution, validation,
 middleware, dependency injection, or the tool itself are logged and converted
 to an agent-readable string prefixed with `"Tool failed: "`. Consequently tool
-implementations need no toolkit-specific result import. Without an error
-boundary, exceptions propagate to the caller normally.
+implementations need no toolkit-specific result import. Without that
+middleware, exceptions propagate to the caller normally.
 
 Because dispatch by name is dynamic and one registry can contain heterogeneous
 return types, the static return type of `Tools.execute()` is `object`. The
@@ -315,12 +319,16 @@ validation are core execution mechanics performed when the middleware chain
 invokes the call. With `Tools()` alone, execution exceptions propagate
 normally.
 
-Use `standard_middleware()` when an agent loop should explicitly opt into the
-provided error boundary and call logging. Compose additional middleware in the
-same tuple, for example a timeout:
+List every middleware an agent loop should use explicitly. For example, this
+enables the provided error boundary, call logging, and a timeout:
 
 ```python
-from agenttoolkit import ToolCall, ToolMiddleware, standard_middleware
+from agenttoolkit import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
+    ToolCall,
+    ToolMiddleware,
+)
 
 
 class TimeoutMiddleware(ToolMiddleware):
@@ -332,7 +340,11 @@ class TimeoutMiddleware(ToolMiddleware):
 
 
 tools = Tools(
-    middleware=(*standard_middleware(), TimeoutMiddleware(5.0)),
+    middleware=(
+        ErrorBoundaryMiddleware(),
+        CallLoggingMiddleware(),
+        TimeoutMiddleware(5.0),
+    ),
 )
 ```
 
@@ -498,11 +510,19 @@ touching the tool's own result. The check uses a lightweight fingerprint, so
 unchanged skill documents are not reparsed:
 
 ```python
-from agenttoolkit import SkillRefreshMiddleware, standard_middleware
+from agenttoolkit import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
+    SkillRefreshMiddleware,
+)
 
 tools = Tools(
     context=ToolContext(skills),
-    middleware=(*standard_middleware(), SkillRefreshMiddleware()),
+    middleware=(
+        ErrorBoundaryMiddleware(),
+        CallLoggingMiddleware(),
+        SkillRefreshMiddleware(),
+    ),
 )
 ```
 
@@ -511,8 +531,6 @@ construction — a per-call `context=` argument refreshes the registry
 actually in use, and the
 middleware is a no-op when the context holds no `Skills`.
 
-Pass `when=` to select tools by any other predicate over the `Tool`, e.g.
-`SkillRefreshMiddleware(when=lambda tool: "skills" in tool.tags)`.
 Invalid skill edits are not activated and
 the previous registry remains available. Applications that embed
 `skills.render_prompt()` in model context should render that dynamic portion

@@ -2,7 +2,12 @@ import argparse
 import asyncio
 
 from agenttoolkit.builtins.shell import BindMount
-from agenttoolkit.tools import ToolContext, Tools, standard_middleware
+from agenttoolkit.tools import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
+    ToolContext,
+    Tools,
+)
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model
@@ -64,7 +69,7 @@ async def main() -> None:
     ) as runner:
         tools = Tools(
             context=ToolContext(runner),
-            middleware=standard_middleware(),
+            middleware=(ErrorBoundaryMiddleware(), CallLoggingMiddleware()),
         )
         register_shell_tool(
             tools,

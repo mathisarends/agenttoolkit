@@ -12,8 +12,6 @@ from .middleware import (
     SkillRefreshMiddleware,
     ToolCall,
     ToolMiddleware,
-    ToolPredicate,
-    standard_middleware,
 )
 from .models import Tool, ToolMetadata, ToolSchemaFormat
 from .schema import ToolSchema, build_schema
@@ -31,7 +29,6 @@ __all__ = [
     "ToolDescription",
     "ToolMetadata",
     "ToolMiddleware",
-    "ToolPredicate",
     "ToolSchema",
     "ToolSchemaFormat",
     "Tools",
@@ -39,5 +36,4 @@ __all__ = [
     "description_from_context",
     "provided",
     "requires",
-    "standard_middleware",
 ]

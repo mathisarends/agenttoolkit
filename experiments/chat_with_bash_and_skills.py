@@ -5,7 +5,12 @@ from pathlib import Path, PurePosixPath
 
 from agenttoolkit import Skills
 from agenttoolkit.builtins.shell import BindMount
-from agenttoolkit.tools import ToolContext, Tools, standard_middleware
+from agenttoolkit.tools import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
+    ToolContext,
+    Tools,
+)
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model
@@ -46,7 +51,7 @@ async def main() -> None:
     async with runner_context as runner:
         tools = Tools(
             context=ToolContext(runner, skills),
-            middleware=standard_middleware(),
+            middleware=(ErrorBoundaryMiddleware(), CallLoggingMiddleware()),
         )
         register_skill_loader(tools, container_root=CONTAINER_SKILLS_DIR)
         register_shell_tool(

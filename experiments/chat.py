@@ -5,12 +5,13 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 from agenttoolkit.tools import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
     Inject,
     ToolContext,
     Tools,
     description_from_context,
     requires,
-    standard_middleware,
 )
 from experiments.agent import Agent
 from experiments.environments import Console
@@ -25,7 +26,10 @@ class UserInfo:
 
 context_user = UserInfo(name="Mathis", is_admin=True)
 context = ToolContext(context_user)
-tools = Tools(context=context, middleware=standard_middleware())
+tools = Tools(
+    context=context,
+    middleware=(ErrorBoundaryMiddleware(), CallLoggingMiddleware()),
+)
 
 
 @tools.action("Get the current date and time")

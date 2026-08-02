@@ -4,11 +4,12 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
     SkillRefreshMiddleware,
     Skills,
     ToolContext,
     Tools,
-    standard_middleware,
 )
 
 
@@ -80,28 +81,6 @@ async def test_every_tool_refreshes_registry_by_default(
 
 
 @pytest.mark.asyncio
-async def test_custom_predicate_selects_tools(tmp_path: Path) -> None:
-    make_skill(tmp_path)
-    skills = Skills.from_dir(tmp_path)
-    tools = Tools(
-        context=ToolContext(skills),
-        middleware=[
-            SkillRefreshMiddleware(when=lambda tool: "skills" in tool.tags),
-        ],
-    )
-
-    @tools.action("Write a skill", tags=["skills"])
-    def write_skill() -> str:
-        make_skill(tmp_path, "created")
-        return "written"
-
-    result = await tools.execute("write_skill")
-
-    assert result == "written"
-    assert skills.names() == ["created", "existing"]
-
-
-@pytest.mark.asyncio
 async def test_invalid_edit_reports_error_and_keeps_active_registry(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -139,7 +118,11 @@ async def test_failed_writing_tool_still_reports_catalog_update(
     skills = Skills.from_dir(tmp_path)
     tools = Tools(
         context=ToolContext(skills),
-        middleware=(*standard_middleware(), SkillRefreshMiddleware()),
+        middleware=(
+            ErrorBoundaryMiddleware(),
+            CallLoggingMiddleware(),
+            SkillRefreshMiddleware(),
+        ),
     )
 
     @tools.action("Write and fail")

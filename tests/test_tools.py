@@ -5,13 +5,14 @@ import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 from agenttoolkit import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
     Inject,
     ToolContext,
     Tools,
     ToolSchemaFormat,
     description_from_context,
     provided,
-    standard_middleware,
 )
 
 
@@ -53,7 +54,7 @@ async def test_register_validate_inject_and_execute() -> None:
 
 @pytest.mark.asyncio
 async def test_plain_signature_is_validated_and_sync_result_is_returned() -> None:
-    tools = Tools(middleware=standard_middleware())
+    tools = Tools(middleware=(ErrorBoundaryMiddleware(), CallLoggingMiddleware()))
 
     @tools.action("Add numbers")
     def add(a: int, b: int = 1) -> int:
@@ -159,7 +160,7 @@ def test_context_controls_availability_and_description() -> None:
 async def test_tool_errors_are_logged_and_returned_by_the_boundary(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    tools = Tools(middleware=standard_middleware())
+    tools = Tools(middleware=(ErrorBoundaryMiddleware(), CallLoggingMiddleware()))
 
     @tools.action("Fail internally")
     def internal_failure() -> None:
