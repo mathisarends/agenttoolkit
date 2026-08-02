@@ -14,7 +14,6 @@ from agenttoolkit.tools.middleware import (
 from agenttoolkit.tools.models import (
     StatusFormatter,
     Tool,
-    ToolEffect,
     ToolMetadata,
     ToolSchemaFormat,
 )
@@ -39,7 +38,6 @@ class Tools:
         *,
         params: type[ParamsT] | None = None,
         status: StatusFormatter[ParamsT] | None = None,
-        effects: Iterable[ToolEffect] = (),
         requires_approval: bool = False,
         available_when: ToolAvailability | None = None,
         tags: Sequence[str] = (),
@@ -59,7 +57,6 @@ class Tools:
                     fn=func,
                     param_model=params,
                     metadata=ToolMetadata(
-                        effects=frozenset(effects),
                         status=status,
                         tags=frozenset(tags),
                         extra=metadata or {},

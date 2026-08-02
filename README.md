@@ -136,7 +136,6 @@ class RefundParams(BaseModel):
 @tools.action(
     "Issue a refund for an order.",
     params=RefundParams,
-    effects=(ToolEffect.NETWORK,),
     status=lambda params: (
         f"Refunding {params.amount} for order {params.order_id}..."
     ),
@@ -149,16 +148,10 @@ def refund(params: RefundParams, client: Inject[BillingClient]) -> str:
     return "refunded"
 ```
 
-None of `effects`, `status`, `tags`, `requires_approval`, or `metadata` are
+None of `status`, `tags`, `requires_approval`, or `metadata` are
 visible to the model — they never appear in the generated JSON Schema. They
 exist for the host loop that dispatches the call:
 
-- `effects` — a `frozenset[ToolEffect]` declaring what a call does to the
-  world (`READS_WORKSPACE`, `WRITES_WORKSPACE`, `NETWORK`,
-  `SPAWNS_PROCESS`), readable as `tool.effects` or via
-  `tool.has_effect(...)`. Effects let middleware and host policies react to
-  behaviour rather than to tool names, which are part of the model-facing
-  API and change over time.
 - `status` — a human-readable status message, either a `str.format`
   template referencing parameter names or a callable. For callables, the
   parameter type is inferred from `params`, providing type checking and IDE
@@ -174,7 +167,6 @@ exist for the host loop that dispatches the call:
 
 ```python
 tool = tools.get("refund")
-tool.effects             # frozenset({ToolEffect.NETWORK})
 tool.tags                # frozenset({"billing", "write"})
 tool.extra["owner"]      # "billing-team"
 tool.requires_approval   # True
@@ -283,7 +275,7 @@ else:
 Iterating a `Tools` instance yields the underlying `Tool` objects — every
 registered one, gated or not. Filter with `tool.is_available(context)` to print
 a catalog of what a given context actually exposes (`tool.name`,
-`tool.resolve_description(context)`, `tool.effects`, ...).
+`tool.resolve_description(context)`, `tool.tags`, ...).
 
 ## Results and errors
 
@@ -501,10 +493,9 @@ first compares a lightweight fingerprint of the `SKILL.md` paths, modification
 times, and sizes, avoiding parsing when no skill document changed.
 
 Agents that can write their own skills can attach `SkillRefreshMiddleware`.
-By default it refreshes the registry after every tool that declares
-`ToolEffect.WRITES_WORKSPACE`, silently and without touching the tool's own
-result — so a newly added write tool is covered as soon as it declares its
-effect, with no list of tool names to keep in sync:
+By default it checks the registry after every tool call, silently and without
+touching the tool's own result. The check uses a lightweight fingerprint, so
+unchanged skill documents are not reparsed:
 
 ```python
 from agenttoolkit import SkillRefreshMiddleware, standard_middleware

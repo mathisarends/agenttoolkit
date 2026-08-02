@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, ValidationError
 from agenttoolkit import (
     Inject,
     ToolContext,
-    ToolEffect,
     Tools,
     ToolSchemaFormat,
     description_from_context,
@@ -34,7 +33,6 @@ async def test_register_validate_inject_and_execute() -> None:
     @tools.action(
         "Search",
         params=SearchParams,
-        effects=(ToolEffect.NETWORK,),
         tags=["network"],
         metadata={"owner": "knowledge"},
     )
@@ -49,8 +47,6 @@ async def test_register_validate_inject_and_execute() -> None:
 
     assert result == "found:docs:10"
     assert tool is not None
-    assert tool.effects == frozenset({ToolEffect.NETWORK})
-    assert tool.has_effect(ToolEffect.NETWORK)
     assert tool.tags == frozenset({"network"})
     assert tool.extra["owner"] == "knowledge"
 

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from agenttoolkit.builtins.fs import Workspace
-from agenttoolkit.tools import Inject, ToolEffect, Tools
+from agenttoolkit.tools import Inject, Tools
 
 
 class ReadFileParams(BaseModel):
@@ -28,7 +28,6 @@ def register_file_tools(tools: Tools) -> None:
         "Read a UTF-8 text file from the workspace.",
         params=ReadFileParams,
         status="Reading {path}",
-        effects=(ToolEffect.READS_WORKSPACE,),
     )
     async def read_file(
         params: ReadFileParams,
@@ -41,7 +40,6 @@ def register_file_tools(tools: Tools) -> None:
         "Missing parent directories are created.",
         params=WriteFileParams,
         status="Writing {path}",
-        effects=(ToolEffect.WRITES_WORKSPACE,),
     )
     async def write_file(
         params: WriteFileParams,
@@ -55,7 +53,6 @@ def register_file_tools(tools: Tools) -> None:
         "old text must occur exactly once.",
         params=EditFileParams,
         status="Editing {path}",
-        effects=(ToolEffect.READS_WORKSPACE, ToolEffect.WRITES_WORKSPACE),
     )
     async def edit_file(
         params: EditFileParams,

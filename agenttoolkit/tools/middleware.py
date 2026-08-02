@@ -6,7 +6,7 @@ from typing import Any
 
 from agenttoolkit.skills import Skills
 from agenttoolkit.tools.context import ToolContext
-from agenttoolkit.tools.models import Tool, ToolEffect
+from agenttoolkit.tools.models import Tool
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +61,12 @@ class CallLoggingMiddleware(ToolMiddleware):
             logger.info("[tool] %s finished (%.0f ms)", call.name, elapsed_ms)
 
 
-def _writes_workspace(tool: Tool) -> bool:
-    return tool.has_effect(ToolEffect.WRITES_WORKSPACE)
+def _all_tools(tool: Tool) -> bool:
+    return True
 
 
 class SkillRefreshMiddleware(ToolMiddleware):
-    def __init__(self, *, when: ToolPredicate = _writes_workspace) -> None:
+    def __init__(self, *, when: ToolPredicate = _all_tools) -> None:
         self._when = when
 
     async def __call__(

@@ -15,7 +15,7 @@ from .middleware import (
     ToolPredicate,
     standard_middleware,
 )
-from .models import Tool, ToolEffect, ToolMetadata, ToolSchemaFormat
+from .models import Tool, ToolMetadata, ToolSchemaFormat
 from .schema import ToolSchema, build_schema
 from .tools import Tools
 
@@ -29,7 +29,6 @@ __all__ = [
     "ToolCall",
     "ToolContext",
     "ToolDescription",
-    "ToolEffect",
     "ToolMetadata",
     "ToolMiddleware",
     "ToolPredicate",

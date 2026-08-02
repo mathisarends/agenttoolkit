@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from agenttoolkit.builtins.fs import LocalWorkspace
-from agenttoolkit.tools import ToolContext, ToolEffect, Tools, standard_middleware
+from agenttoolkit.tools import ToolContext, Tools, standard_middleware
 from experiments.tools import register_file_tools
 
 
@@ -56,13 +56,8 @@ async def test_file_tools_return_actionable_workspace_errors(tmp_path: Path) -> 
     assert "outside workspace" in outside
 
 
-def test_file_tools_expose_expected_metadata() -> None:
+def test_file_tools_are_registered_in_expected_order() -> None:
     tools = Tools()
     register_file_tools(tools)
 
     assert [tool.name for tool in tools] == ["read_file", "write_file", "edit_file"]
-    assert [tool.effects for tool in tools] == [
-        frozenset({ToolEffect.READS_WORKSPACE}),
-        frozenset({ToolEffect.WRITES_WORKSPACE}),
-        frozenset({ToolEffect.READS_WORKSPACE, ToolEffect.WRITES_WORKSPACE}),
-    ]
