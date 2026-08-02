@@ -5,17 +5,17 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
+from types import TracebackType
 from typing import Self
 
-from agenttoolkit.builtins.shell.policy import SandboxPolicy
-from agenttoolkit.builtins.shell.sandbox import (
-    SandboxError,
-    SandboxLifecycle,
-    SandboxResult,
-    SandboxStateError,
-    SandboxUnavailableError,
+from agenttoolkit.builtins.shell.command import (
+    CommandError,
+    CommandResult,
+    CommandUnavailableError,
     run_process,
 )
+from agenttoolkit.builtins.shell.execution import CommandDefaults
+from agenttoolkit.builtins.shell.policy import SandboxPolicy
 
 
 class DockerNetworkMode(StrEnum):
@@ -70,12 +70,17 @@ class BindMount:
 _KEEP_ALIVE_COMMAND = "while :; do sleep 3600; done"
 
 
-class DockerSandbox(SandboxLifecycle):
+class DockerSandboxStateError(CommandError):
+    pass
+
+
+class DockerSandbox:
     def __init__(
         self,
         image: str,
-        policy: SandboxPolicy | None = None,
         *,
+        defaults: CommandDefaults | None = None,
+        policy: SandboxPolicy | None = None,
         mounts: Sequence[BindMount] = (),
         inherit_environment: Sequence[str] = (),
         user: str | None = None,
@@ -84,10 +89,10 @@ class DockerSandbox(SandboxLifecycle):
         shell: str = "/bin/sh",
         shell_arguments: Sequence[str] = ("-lc",),
     ) -> None:
-        super().__init__()
         if not image.strip():
             raise ValueError("image must not be empty")
         self._image = image
+        self._defaults = defaults or CommandDefaults()
         self._policy = policy or SandboxPolicy()
         self._mount_definitions = _validate_mounts(mounts)
         self._inherit_environment = _validate_environment_names(inherit_environment)
@@ -108,10 +113,15 @@ class DockerSandbox(SandboxLifecycle):
         self._container_name: str | None = None
         self._active_mounts: tuple[tuple[Path, PurePosixPath, bool], ...] | None = None
         self._operation_lock = asyncio.Lock()
+        self._is_open = False
 
     @property
     def policy(self) -> SandboxPolicy:
         return self._policy
+
+    @property
+    def defaults(self) -> CommandDefaults:
+        return self._defaults
 
     @property
     def mounts(self) -> tuple[BindMount, ...]:
@@ -133,13 +143,17 @@ class DockerSandbox(SandboxLifecycle):
     def container_name(self) -> str | None:
         return self._container_name
 
+    @property
+    def is_open(self) -> bool:
+        return self._is_open
+
     async def open(self) -> None:
         async with self._operation_lock:
             if self._is_open:
-                raise SandboxStateError("sandbox is already open")
+                raise DockerSandboxStateError("sandbox is already open")
 
             container_name = f"agenttoolkit-{uuid.uuid4().hex}"
-            selected_cwd = self._policy.validate_working_directory(None)
+            selected_cwd = self._select_working_directory(None)
             mounts = self._mounts(selected_cwd)
             argv = self._build_open_argv(container_name, selected_cwd, mounts)
             try:
@@ -149,10 +163,10 @@ class DockerSandbox(SandboxLifecycle):
                     cwd=None,
                     env=None,
                     stdin=None,
-                    timeout=self._policy.limits.timeout_seconds,
-                    max_output_bytes=self._policy.limits.max_output_bytes,
+                    timeout=self._defaults.limits.timeout_seconds,
+                    max_output_bytes=self._defaults.limits.max_output_bytes,
                 )
-            except SandboxUnavailableError:
+            except CommandUnavailableError:
                 raise
             except asyncio.CancelledError:
                 await asyncio.shield(self._remove_container(container_name))
@@ -183,6 +197,18 @@ class DockerSandbox(SandboxLifecycle):
             finally:
                 self._clear_container_state()
 
+    async def __aenter__(self) -> Self:
+        await self.open()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self.close()
+
     async def execute(
         self,
         command: str,
@@ -191,7 +217,7 @@ class DockerSandbox(SandboxLifecycle):
         env: Mapping[str, str] | None = None,
         stdin: str | bytes | None = None,
         timeout: float | None = None,
-    ) -> SandboxResult:
+    ) -> CommandResult:
         if not command:
             raise ValueError("command must not be empty")
 
@@ -213,13 +239,13 @@ class DockerSandbox(SandboxLifecycle):
                     env=None,
                     stdin=stdin,
                     timeout=(
-                        self._policy.limits.timeout_seconds
+                        self._defaults.limits.timeout_seconds
                         if timeout is None
                         else timeout
                     ),
-                    max_output_bytes=self._policy.limits.max_output_bytes,
+                    max_output_bytes=self._defaults.limits.max_output_bytes,
                 )
-            except SandboxUnavailableError:
+            except CommandUnavailableError:
                 raise
             except asyncio.CancelledError:
                 await asyncio.shield(self._discard_container(container_name))
@@ -236,7 +262,7 @@ class DockerSandbox(SandboxLifecycle):
         *,
         container_name: str | None = None,
     ) -> tuple[str, ...]:
-        selected_cwd = self._policy.validate_working_directory(None)
+        selected_cwd = self._select_working_directory(None)
         mounts = self._mounts(selected_cwd)
         name = container_name or f"agenttoolkit-{uuid.uuid4().hex}"
         return self._build_open_argv(name, selected_cwd, mounts)
@@ -311,12 +337,12 @@ class DockerSandbox(SandboxLifecycle):
             argv.extend(("--mount", specification))
 
         for key in self._inherit_environment:
-            if key in self._policy.environment:
+            if key in self._defaults.environment:
                 continue
             if key not in os.environ:
                 raise ValueError(f"host environment variable is not set: {key}")
             argv.extend(("--env", key))
-        for key, value in self._policy.environment.items():
+        for key, value in self._defaults.environment.items():
             argv.extend(("--env", f"{key}={value}"))
 
         argv.extend((self._image, self._shell, "-c", _KEEP_ALIVE_COMMAND))
@@ -334,7 +360,7 @@ class DockerSandbox(SandboxLifecycle):
     ) -> tuple[str, ...]:
         if not command:
             raise ValueError("command must not be empty")
-        selected_cwd = self._policy.validate_working_directory(cwd)
+        selected_cwd = self._select_working_directory(cwd)
         container_cwd = _container_path(selected_cwd, mounts)
         argv = [self._executable, "exec"]
         if interactive:
@@ -353,7 +379,7 @@ class DockerSandbox(SandboxLifecycle):
         self,
         path: str | os.PathLike[str],
     ) -> PurePosixPath:
-        working_directory = self._policy.validate_working_directory(None)
+        working_directory = self._select_working_directory(None)
         requested = Path(path).expanduser()
         if not requested.is_absolute():
             requested = working_directory / requested
@@ -378,8 +404,22 @@ class DockerSandbox(SandboxLifecycle):
     ) -> tuple[str, tuple[tuple[Path, PurePosixPath, bool], ...]]:
         self._require_open()
         if self._container_name is None or self._active_mounts is None:
-            raise SandboxStateError("sandbox container state is inconsistent")
+            raise DockerSandboxStateError("sandbox container state is inconsistent")
         return self._container_name, self._active_mounts
+
+    def _require_open(self) -> None:
+        if not self._is_open:
+            raise DockerSandboxStateError(
+                "sandbox is not open; call open() or use 'async with' first"
+            )
+
+    def _select_working_directory(
+        self,
+        path: str | os.PathLike[str] | None,
+    ) -> Path:
+        selected = self._defaults.select_working_directory(path)
+        self._policy.require_readable(selected)
+        return selected
 
     async def _remove_container(self, name: str) -> None:
         try:
@@ -392,7 +432,7 @@ class DockerSandbox(SandboxLifecycle):
                 timeout=10,
                 max_output_bytes=64 * 1024,
             )
-        except SandboxError:
+        except CommandError:
             pass
 
     def _mounts(
@@ -400,7 +440,7 @@ class DockerSandbox(SandboxLifecycle):
         working_directory: Path,
     ) -> tuple[tuple[Path, PurePosixPath, bool], ...]:
         roots: list[tuple[Path, bool]] = []
-        workspace = self._policy.working_directory or working_directory
+        workspace = self._defaults.working_directory or working_directory
         roots.append((workspace, self._policy.allows_write(workspace)))
         roots.extend((path, False) for path in self._policy.readable_paths)
         roots.extend((path, True) for path in self._policy.writable_paths)

@@ -2,32 +2,27 @@ import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from agenttoolkit.builtins.shell.policy import SandboxPolicy
-from agenttoolkit.builtins.shell.sandbox import (
-    SandboxLifecycle,
-    SandboxResult,
-    run_process,
-)
+from agenttoolkit.builtins.shell.command import CommandResult, run_process
+from agenttoolkit.builtins.shell.execution import CommandDefaults
 
 
-class UnsafeLocalSandbox(SandboxLifecycle):
-    """Runs locally; path and network policy fields are intentionally not enforced."""
+class LocalShellRunner:
+    """Executes shell commands directly on the host without isolation."""
 
     def __init__(
         self,
-        policy: SandboxPolicy | None = None,
+        defaults: CommandDefaults | None = None,
         *,
         shell: str = "bash",
         shell_arguments: Sequence[str] = ("-lc",),
     ) -> None:
-        super().__init__()
-        self._policy = policy or SandboxPolicy(enable_network_access=True)
+        self._defaults = defaults or CommandDefaults()
         self._shell = shell
         self._shell_arguments = tuple(shell_arguments)
 
     @property
-    def policy(self) -> SandboxPolicy:
-        return self._policy
+    def defaults(self) -> CommandDefaults:
+        return self._defaults
 
     async def execute(
         self,
@@ -37,14 +32,13 @@ class UnsafeLocalSandbox(SandboxLifecycle):
         env: Mapping[str, str] | None = None,
         stdin: str | bytes | None = None,
         timeout: float | None = None,
-    ) -> SandboxResult:
-        self._require_open()
+    ) -> CommandResult:
         if not command:
             raise ValueError("command must not be empty")
 
-        selected_cwd = self._policy.validate_working_directory(cwd)
+        selected_cwd = self._defaults.select_working_directory(cwd)
         selected_env = dict(os.environ)
-        selected_env.update(self._policy.environment)
+        selected_env.update(self._defaults.environment)
         if env:
             selected_env.update(env)
 
@@ -55,7 +49,7 @@ class UnsafeLocalSandbox(SandboxLifecycle):
             env=selected_env,
             stdin=stdin,
             timeout=(
-                self._policy.limits.timeout_seconds if timeout is None else timeout
+                self._defaults.limits.timeout_seconds if timeout is None else timeout
             ),
-            max_output_bytes=self._policy.limits.max_output_bytes,
+            max_output_bytes=self._defaults.limits.max_output_bytes,
         )

@@ -9,7 +9,7 @@ from experiments.model import experiment_model
 from experiments.sandboxing import (
     DEFAULT_DOCKER_IMAGE,
     experiment_workspace,
-    workspace_sandbox,
+    workspace_runner,
 )
 from experiments.tools import register_shell_tool
 
@@ -55,42 +55,41 @@ async def main() -> None:
         *(BindMount.read_only(source, target) for source, target in args.mount_ro),
         *(BindMount.read_write(source, target) for source, target in args.mount_rw),
     )
-    sandbox = workspace_sandbox(
+    async with workspace_runner(
         experiment_workspace("sandbox"),
         unsafe=args.unsafe,
         enable_network_access=args.network,
         inherit_environment=args.inherit_env,
         mounts=mounts,
-    )
-    tools = Tools(context=ToolContext(sandbox))
-    register_shell_tool(
-        tools,
-        name="batch",
-        description="Run a shell command in the sandbox and return its output.",
-        requires_approval=args.unsafe,
-    )
-    console = Console(tools)
+    ) as runner:
+        tools = Tools(context=ToolContext(runner))
+        register_shell_tool(
+            tools,
+            name="batch",
+            description="Run a shell command and return its output.",
+            requires_approval=args.unsafe,
+        )
+        console = Console(tools)
 
-    model = experiment_model("gpt-5.6-sol", on_retry=console.on_retry)
-    agent = Agent(
-        model,
-        tools,
-        system_prompt=(
-            "You are a coding assistant with a single 'batch' tool that runs "
-            "shell commands in a sandbox with Python 3.14 installed. Use it to "
-            "inspect files, run scripts, and report results."
-        ),
-        on_tool_call=console.on_tool_call,
-        on_tool_result=console.on_tool_result,
-        confirm=console.confirm,
-    )
+        model = experiment_model("gpt-5.6-sol", on_retry=console.on_retry)
+        agent = Agent(
+            model,
+            tools,
+            system_prompt=(
+                "You are a coding assistant with a single 'batch' tool that runs "
+                "shell commands with Python 3.14 installed. Use it to inspect "
+                "files, run scripts, and report results."
+            ),
+            on_tool_call=console.on_tool_call,
+            on_tool_result=console.on_tool_result,
+            confirm=console.confirm,
+        )
 
-    mode = (
-        "UNSAFE (local)"
-        if args.unsafe
-        else f"sandboxed (docker: {DEFAULT_DOCKER_IMAGE})"
-    )
-    async with sandbox:
+        mode = (
+            "UNSAFE (local)"
+            if args.unsafe
+            else f"sandboxed (docker: {DEFAULT_DOCKER_IMAGE})"
+        )
         await console.run(agent, f"Chat gestartet [{mode}]. 'exit' zum Beenden.")
 
 

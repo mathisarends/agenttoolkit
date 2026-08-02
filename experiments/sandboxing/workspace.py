@@ -1,14 +1,16 @@
 import os
 import tempfile
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from agenttoolkit.builtins.shell import (
     BindMount,
+    CommandDefaults,
+    CommandRunner,
     DockerSandbox,
-    Sandbox,
+    LocalShellRunner,
     SandboxPolicy,
-    UnsafeLocalSandbox,
 )
 
 DEFAULT_DOCKER_IMAGE = "python:3.14-slim"
@@ -21,7 +23,8 @@ def experiment_workspace(name: str) -> Path:
     return workspace
 
 
-def workspace_sandbox(
+@asynccontextmanager
+async def workspace_runner(
     workspace: Path,
     *,
     unsafe: bool = False,
@@ -30,27 +33,32 @@ def workspace_sandbox(
     enable_network_access: bool = False,
     inherit_environment: Sequence[str] = (),
     mounts: Sequence[BindMount] = (),
-) -> Sandbox:
+) -> AsyncGenerator[CommandRunner]:
     workspace.mkdir(parents=True, exist_ok=True)
-    policy = SandboxPolicy.for_workspace(
-        workspace,
-        writable=True,
-        enable_network_access=unsafe or enable_network_access,
-    )
+    defaults = CommandDefaults(working_directory=workspace)
     if unsafe:
         local_shell, shell_arguments = (
             ("cmd", ("/c",)) if os.name == "nt" else ("bash", ("-lc",))
         )
-        return UnsafeLocalSandbox(
-            policy=policy,
+        yield LocalShellRunner(
+            defaults=defaults,
             shell=local_shell,
             shell_arguments=shell_arguments,
         )
-    return DockerSandbox(
+        return
+
+    sandbox = DockerSandbox(
         image=image,
-        policy=policy,
+        defaults=defaults,
+        policy=SandboxPolicy.for_workspace(
+            workspace,
+            writable=True,
+            enable_network_access=enable_network_access,
+        ),
         mounts=mounts,
         inherit_environment=inherit_environment,
         user="host",
         shell=shell,
     )
+    async with sandbox:
+        yield sandbox

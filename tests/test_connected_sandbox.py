@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from agenttoolkit.builtins.shell import BindMount
-from experiments.sandboxing import connected_sandbox
+from agenttoolkit.builtins.shell import BindMount, CommandRunner, LocalShellRunner
+from experiments.sandboxing import connected_sandbox, workspace_runner
 
 _CONNECTED_ENVIRONMENT = (
     "HUE_BRIDGE_IP",
@@ -11,6 +11,19 @@ _CONNECTED_ENVIRONMENT = (
     "SONOS_IP_ADDRESS",
     "SONOS_SPEAKER_NAME",
 )
+
+
+@pytest.mark.asyncio
+async def test_workspace_runner_exposes_local_runner_without_fake_lifecycle(
+    tmp_path: Path,
+) -> None:
+    async with workspace_runner(tmp_path, unsafe=True) as runner:
+        assert isinstance(runner, CommandRunner)
+        assert isinstance(runner, LocalShellRunner)
+        assert not hasattr(runner, "open")
+        result = await runner.execute("echo ok")
+
+    assert result.ok
 
 
 @pytest.mark.parametrize("missing_name", _CONNECTED_ENVIRONMENT)

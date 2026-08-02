@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from agenttoolkit.builtins.shell import (
     BindMount,
+    CommandDefaults,
     DockerNetworkMode,
     DockerSandbox,
     SandboxPolicy,
@@ -45,7 +46,8 @@ def connected_sandbox(
 
     return DockerSandbox(
         _IMAGE,
-        SandboxPolicy.for_workspace(
+        defaults=CommandDefaults(working_directory=workspace),
+        policy=SandboxPolicy.for_workspace(
             workspace,
             writable=True,
             enable_network_access=True,

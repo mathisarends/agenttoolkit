@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from agenttoolkit.builtins.shell import Sandbox
+from agenttoolkit.builtins.shell import CommandRunner
 from agenttoolkit.tools import ActionResult, Inject, ToolEffect, Tools
 
 
@@ -29,9 +29,9 @@ def register_shell_tool(
     )
     async def run_shell(
         params: ShellParams,
-        sandbox: Inject[Sandbox],
+        runner: Inject[CommandRunner],
     ) -> ActionResult:
-        result = await sandbox.execute(params.command)
+        result = await runner.execute(params.command)
         if not result.ok:
             return ActionResult.fail(
                 f"exit={result.returncode} timed_out={result.timed_out}\n"

@@ -9,7 +9,7 @@ from agenttoolkit.tools import ToolContext, Tools
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model
-from experiments.sandboxing import experiment_workspace, workspace_sandbox
+from experiments.sandboxing import experiment_workspace, workspace_runner
 from experiments.tools import register_shell_tool, register_skill_loader
 
 SKILLS_DIR = Path(__file__).parent / "skills"
@@ -38,30 +38,30 @@ async def main() -> None:
     args = parser.parse_args()
 
     skills = Skills.from_dir(SKILLS_DIR)
-    sandbox = workspace_sandbox(
+    runner_context = workspace_runner(
         experiment_workspace("bash-and-skills"),
         mounts=(BindMount.read_only(SKILLS_DIR, CONTAINER_SKILLS_DIR),),
         shell="/bin/bash",
     )
-    tools = Tools(context=ToolContext(sandbox, skills))
-    register_skill_loader(tools, container_root=CONTAINER_SKILLS_DIR)
-    register_shell_tool(
-        tools,
-        description=(
-            "Run a Bash command in the sandbox. Skill files are read-only under "
-            "/skills; the writable working directory is /workspace."
-        ),
-    )
+    async with runner_context as runner:
+        tools = Tools(context=ToolContext(runner, skills))
+        register_skill_loader(tools, container_root=CONTAINER_SKILLS_DIR)
+        register_shell_tool(
+            tools,
+            description=(
+                "Run a Bash command in the sandbox. Skill files are read-only "
+                "under /skills; the writable working directory is /workspace."
+            ),
+        )
 
-    console = Console(tools)
-    agent = Agent(
-        experiment_model("gpt-5.6-terra", on_retry=console.on_retry),
-        tools,
-        system_prompt=_system_prompt(skills),
-        on_tool_call=console.on_tool_call,
-        on_tool_result=console.on_tool_result,
-    )
-    async with sandbox:
+        console = Console(tools)
+        agent = Agent(
+            experiment_model("gpt-5.6-terra", on_retry=console.on_retry),
+            tools,
+            system_prompt=_system_prompt(skills),
+            on_tool_call=console.on_tool_call,
+            on_tool_result=console.on_tool_result,
+        )
         await console.run(
             agent,
             f"Skills-Chat gestartet [{', '.join(skills.names())}]. 'exit' zum Beenden.",

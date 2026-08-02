@@ -8,26 +8,19 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import TracebackType
-from typing import Protocol, Self, runtime_checkable
-
-from agenttoolkit.builtins.shell.policy import SandboxPolicy
+from typing import Protocol, runtime_checkable
 
 
-class SandboxError(Exception):
+class CommandError(Exception):
     pass
 
 
-class SandboxUnavailableError(SandboxError):
+class CommandUnavailableError(CommandError):
     pass
 
 
-class SandboxStateError(SandboxError):
-    pass
-
-
-class SandboxExecutionError(SandboxError):
-    def __init__(self, result: SandboxResult) -> None:
+class CommandExecutionError(CommandError):
+    def __init__(self, result: CommandResult) -> None:
         self.result = result
         detail = result.stderr.strip() or result.stdout.strip()
         message = (
@@ -41,7 +34,7 @@ class SandboxExecutionError(SandboxError):
 
 
 @dataclass(frozen=True, slots=True)
-class SandboxResult:
+class CommandResult:
     command: str
     returncode: int | None
     stdout: str
@@ -67,23 +60,15 @@ class SandboxResult:
         separator = "" if self.stdout.endswith("\n") else "\n"
         return f"{self.stdout}{separator}{self.stderr}"
 
-    def check_returncode(self) -> SandboxResult:
+    def check_returncode(self) -> CommandResult:
         if not self.ok:
-            raise SandboxExecutionError(self)
+            raise CommandExecutionError(self)
         return self
 
 
 @runtime_checkable
-class Sandbox(Protocol):
-    @property
-    def policy(self) -> SandboxPolicy: ...
-
-    @property
-    def is_open(self) -> bool: ...
-
-    async def open(self) -> None: ...
-
-    async def close(self) -> None: ...
+class CommandRunner(Protocol):
+    """Executes shell commands without making isolation or lifecycle claims."""
 
     async def execute(
         self,
@@ -93,53 +78,7 @@ class Sandbox(Protocol):
         env: Mapping[str, str] | None = None,
         stdin: str | bytes | None = None,
         timeout: float | None = None,
-    ) -> SandboxResult: ...
-
-    async def __aenter__(self) -> Self: ...
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None: ...
-
-
-class SandboxLifecycle:
-    """Common lifecycle for sandbox backends without persistent resources."""
-
-    def __init__(self) -> None:
-        self._is_open = False
-
-    @property
-    def is_open(self) -> bool:
-        return self._is_open
-
-    async def open(self) -> None:
-        if self._is_open:
-            raise SandboxStateError("sandbox is already open")
-        self._is_open = True
-
-    async def close(self) -> None:
-        self._is_open = False
-
-    def _require_open(self) -> None:
-        if not self._is_open:
-            raise SandboxStateError(
-                "sandbox is not open; call open() or use 'async with' first"
-            )
-
-    async def __aenter__(self) -> Self:
-        await self.open()
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        await self.close()
+    ) -> CommandResult: ...
 
 
 async def run_process(
@@ -151,7 +90,7 @@ async def run_process(
     stdin: str | bytes | None,
     timeout: float | None,
     max_output_bytes: int | None,
-) -> SandboxResult:
+) -> CommandResult:
     if not argv:
         raise ValueError("argv must not be empty")
     if timeout is not None and timeout <= 0:
@@ -174,7 +113,7 @@ async def run_process(
             start_new_session=os.name == "posix",
         )
     except FileNotFoundError as error:
-        raise SandboxUnavailableError(f"executable not found: {argv[0]}") from error
+        raise CommandUnavailableError(f"executable not found: {argv[0]}") from error
 
     stdout = bytearray()
     stderr = bytearray()
@@ -237,7 +176,7 @@ async def run_process(
         raise
 
     duration = time.monotonic() - started
-    return SandboxResult(
+    return CommandResult(
         command=command,
         returncode=returncode,
         stdout=stdout.decode(errors="replace"),

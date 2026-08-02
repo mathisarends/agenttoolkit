@@ -3,25 +3,26 @@ import shutil
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
-from agenttoolkit.builtins.shell.policy import SandboxPolicy
-from agenttoolkit.builtins.shell.sandbox import (
-    SandboxLifecycle,
-    SandboxResult,
-    SandboxUnavailableError,
+from agenttoolkit.builtins.shell.command import (
+    CommandResult,
+    CommandUnavailableError,
     run_process,
 )
+from agenttoolkit.builtins.shell.execution import CommandDefaults
+from agenttoolkit.builtins.shell.policy import SandboxPolicy
 
 
-class BubblewrapSandbox(SandboxLifecycle):
+class BubblewrapSandbox:
     def __init__(
         self,
-        policy: SandboxPolicy | None = None,
         *,
+        defaults: CommandDefaults | None = None,
+        policy: SandboxPolicy | None = None,
         executable: str = "bwrap",
         shell: str = "/bin/sh",
         shell_arguments: Sequence[str] = ("-lc",),
     ) -> None:
-        super().__init__()
+        self._defaults = defaults or CommandDefaults()
         self._policy = policy or SandboxPolicy()
         self._executable = executable
         self._shell = shell
@@ -30,6 +31,10 @@ class BubblewrapSandbox(SandboxLifecycle):
     @property
     def policy(self) -> SandboxPolicy:
         return self._policy
+
+    @property
+    def defaults(self) -> CommandDefaults:
+        return self._defaults
 
     @property
     def available(self) -> bool:
@@ -43,10 +48,9 @@ class BubblewrapSandbox(SandboxLifecycle):
         env: Mapping[str, str] | None = None,
         stdin: str | bytes | None = None,
         timeout: float | None = None,
-    ) -> SandboxResult:
-        self._require_open()
+    ) -> CommandResult:
         if not self.available:
-            raise SandboxUnavailableError(
+            raise CommandUnavailableError(
                 "bubblewrap is only available on Linux with bwrap installed"
             )
         argv = self.build_argv(command, cwd=cwd, env=env)
@@ -57,9 +61,9 @@ class BubblewrapSandbox(SandboxLifecycle):
             env=None,
             stdin=stdin,
             timeout=(
-                self._policy.limits.timeout_seconds if timeout is None else timeout
+                self._defaults.limits.timeout_seconds if timeout is None else timeout
             ),
-            max_output_bytes=self._policy.limits.max_output_bytes,
+            max_output_bytes=self._defaults.limits.max_output_bytes,
         )
 
     def build_argv(
@@ -85,7 +89,8 @@ class BubblewrapSandbox(SandboxLifecycle):
             names = ", ".join(unsupported)
             raise ValueError(f"bubblewrap cannot enforce these limits: {names}")
 
-        selected_cwd = self._policy.validate_working_directory(cwd)
+        selected_cwd = self._defaults.select_working_directory(cwd)
+        self._policy.require_readable(selected_cwd)
         mounts = self._mounts(selected_cwd)
         argv = [
             self._executable,
@@ -118,7 +123,7 @@ class BubblewrapSandbox(SandboxLifecycle):
         selected_env = {
             "HOME": "/tmp",
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            **self._policy.environment,
+            **self._defaults.environment,
         }
         if env:
             selected_env.update(env)
@@ -139,7 +144,7 @@ class BubblewrapSandbox(SandboxLifecycle):
 
     def _mounts(self, working_directory: Path) -> tuple[tuple[Path, bool], ...]:
         roots: dict[Path, bool] = {}
-        workspace = self._policy.working_directory or working_directory
+        workspace = self._defaults.working_directory or working_directory
         roots[workspace] = self._policy.allows_write(workspace)
         for path in self._policy.readable_paths:
             roots.setdefault(path, False)

@@ -3,30 +3,33 @@ from .backends import (
     BubblewrapSandbox,
     DockerNetworkMode,
     DockerSandbox,
-    UnsafeLocalSandbox,
+    DockerSandboxStateError,
+    LocalShellRunner,
 )
+from .command import (
+    CommandError,
+    CommandExecutionError,
+    CommandResult,
+    CommandRunner,
+    CommandUnavailableError,
+)
+from .execution import CommandDefaults, CommandLimits
 from .policy import SandboxLimits, SandboxPolicy
-from .sandbox import (
-    Sandbox,
-    SandboxError,
-    SandboxExecutionError,
-    SandboxResult,
-    SandboxStateError,
-    SandboxUnavailableError,
-)
 
 __all__ = [
     "BindMount",
     "BubblewrapSandbox",
+    "CommandDefaults",
+    "CommandError",
+    "CommandExecutionError",
+    "CommandLimits",
+    "CommandResult",
+    "CommandRunner",
+    "CommandUnavailableError",
     "DockerNetworkMode",
     "DockerSandbox",
-    "Sandbox",
-    "SandboxError",
-    "SandboxExecutionError",
+    "DockerSandboxStateError",
+    "LocalShellRunner",
     "SandboxLimits",
     "SandboxPolicy",
-    "SandboxResult",
-    "SandboxStateError",
-    "SandboxUnavailableError",
-    "UnsafeLocalSandbox",
 ]

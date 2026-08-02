@@ -8,37 +8,31 @@ import agenttoolkit.builtins.shell.backends.docker as docker_backend
 from agenttoolkit.builtins.shell import (
     BindMount,
     BubblewrapSandbox,
+    CommandDefaults,
+    CommandExecutionError,
+    CommandLimits,
+    CommandResult,
+    CommandRunner,
+    CommandUnavailableError,
     DockerNetworkMode,
     DockerSandbox,
-    Sandbox,
-    SandboxExecutionError,
+    DockerSandboxStateError,
+    LocalShellRunner,
     SandboxLimits,
     SandboxPolicy,
-    SandboxResult,
-    SandboxStateError,
-    SandboxUnavailableError,
-    UnsafeLocalSandbox,
 )
 
 
-def test_policy_normalizes_paths_network_and_environment(tmp_path: Path) -> None:
+def test_policy_normalizes_isolation_paths_and_network(tmp_path: Path) -> None:
     policy = SandboxPolicy.for_workspace(
         tmp_path,
         enable_network_access=True,
-        environment={"COUNT": "2"},
     )
 
     assert policy.enable_network_access
     assert policy.allows_read(tmp_path / "child")
     assert policy.allows_write(tmp_path / "child")
-    assert policy.environment["COUNT"] == "2"
-    assert policy.validate_working_directory(None) == tmp_path.resolve()
-    child = tmp_path / "child"
-    child.mkdir()
-    assert policy.validate_working_directory("child") == child.resolve()
-
     readonly = SandboxPolicy(
-        working_directory=tmp_path,
         readable_paths=(tmp_path, tmp_path),
         enable_network_access=False,
     )
@@ -50,8 +44,6 @@ def test_policy_normalizes_paths_network_and_environment(tmp_path: Path) -> None
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("timeout_seconds", 0),
-        ("max_output_bytes", -1),
         ("memory_bytes", 0),
         ("pids", -2),
         ("cpus", 0),
@@ -62,108 +54,122 @@ def test_limits_must_be_positive(field: str, value: int) -> None:
         SandboxLimits(**{field: value})
 
 
-def test_policy_rejects_bad_environment_and_working_directory(
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("timeout_seconds", 0), ("max_output_bytes", -1)],
+)
+def test_command_limits_must_be_positive(field: str, value: int) -> None:
+    with pytest.raises(ValueError, match=field):
+        CommandLimits(**{field: value})
+
+
+def test_command_defaults_validate_environment_and_working_directory(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(ValueError, match="variable name"):
-        SandboxPolicy(environment={"BAD=NAME": "value"})
+        CommandDefaults(environment={"BAD=NAME": "value"})
     with pytest.raises(ValueError, match="contains NUL"):
-        SandboxPolicy(environment={"NAME": "bad\0value"})
+        CommandDefaults(environment={"NAME": "bad\0value"})
 
     root = tmp_path / "root"
     root.mkdir()
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    policy = SandboxPolicy.for_workspace(root)
-    with pytest.raises(PermissionError, match="not allowed"):
-        policy.validate_working_directory(outside)
+    defaults = CommandDefaults(root, environment={"COUNT": "2"})
+    assert defaults.environment["COUNT"] == "2"
+    assert defaults.select_working_directory() == root.resolve()
+    child = root / "child"
+    child.mkdir()
+    assert defaults.select_working_directory("child") == child.resolve()
     with pytest.raises(NotADirectoryError):
-        policy.validate_working_directory(root / "missing")
+        defaults.select_working_directory("missing")
 
 
-def test_sandbox_result_helpers() -> None:
-    success = SandboxResult("true", 0, "out", "err", 0.1)
+def test_policy_rejects_unreadable_path(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    policy = SandboxPolicy.for_workspace(root)
+    with pytest.raises(PermissionError, match="not readable"):
+        policy.require_readable(tmp_path / "outside")
+
+
+def test_command_result_helpers() -> None:
+    success = CommandResult("true", 0, "out", "err", 0.1)
     assert success.ok
     assert success.exit_code == 0
     assert success.output == "out\nerr"
     assert success.check_returncode() is success
 
-    failure = SandboxResult("false", 2, "", "bad", 0.1)
-    with pytest.raises(SandboxExecutionError, match="status 2: bad"):
+    failure = CommandResult("false", 2, "", "bad", 0.1)
+    with pytest.raises(CommandExecutionError, match="status 2: bad"):
         failure.check_returncode()
 
-    timeout = SandboxResult("wait", -1, "", "", 1.0, timed_out=True)
-    with pytest.raises(SandboxExecutionError, match="timed out"):
+    timeout = CommandResult("wait", -1, "", "", 1.0, timed_out=True)
+    with pytest.raises(CommandExecutionError, match="timed out"):
         timeout.check_returncode()
 
 
 @pytest.mark.asyncio
-async def test_unsafe_local_sandbox_executes_and_enforces_output_limit(
+async def test_local_shell_runner_executes_and_enforces_output_limit(
     tmp_path: Path,
 ) -> None:
-    policy = SandboxPolicy.for_workspace(
+    defaults = CommandDefaults(
         tmp_path,
-        limits=SandboxLimits(timeout_seconds=2, max_output_bytes=3),
         environment={"FROM_POLICY": "yes"},
+        limits=CommandLimits(timeout_seconds=2, max_output_bytes=3),
     )
-    sandbox = UnsafeLocalSandbox(
-        policy,
+    runner = LocalShellRunner(
+        defaults,
         shell=sys.executable,
         shell_arguments=("-c",),
     )
-    assert isinstance(sandbox, Sandbox)
-    async with sandbox:
-        result = await sandbox.execute(
-            "import os,sys; print(os.environ['FROM_POLICY']); "
-            "print(os.environ['EXTRA']); print(sys.stdin.read())",
-            env={"EXTRA": "ok"},
-            stdin="input",
-        )
+    assert isinstance(runner, CommandRunner)
+    result = await runner.execute(
+        "import os,sys; print(os.environ['FROM_POLICY']); "
+        "print(os.environ['EXTRA']); print(sys.stdin.read())",
+        env={"EXTRA": "ok"},
+        stdin="input",
+    )
     assert result.ok
     assert result.output_truncated
     assert len(result.stdout.encode()) <= 3
 
 
 @pytest.mark.asyncio
-async def test_unsafe_local_sandbox_timeout_errors_and_validation(
+async def test_local_shell_runner_timeout_errors_and_validation(
     tmp_path: Path,
 ) -> None:
-    sandbox = UnsafeLocalSandbox(
-        SandboxPolicy.for_workspace(
-            tmp_path,
-            limits=SandboxLimits(timeout_seconds=0.01),
-        ),
+    runner = LocalShellRunner(
+        CommandDefaults(tmp_path, limits=CommandLimits(timeout_seconds=0.01)),
         shell=sys.executable,
         shell_arguments=("-c",),
     )
-    async with sandbox:
-        result = await sandbox.execute("import time; time.sleep(1)")
-        assert result.timed_out
-        assert not result.ok
+    result = await runner.execute("import time; time.sleep(1)")
+    assert result.timed_out
+    assert not result.ok
 
-        with pytest.raises(ValueError, match="must not be empty"):
-            await sandbox.execute("")
-        with pytest.raises(ValueError, match="positive"):
-            await sandbox.execute("pass", timeout=0)
+    with pytest.raises(ValueError, match="must not be empty"):
+        await runner.execute("")
+    with pytest.raises(ValueError, match="positive"):
+        await runner.execute("pass", timeout=0)
 
-    missing = UnsafeLocalSandbox(shell="definitely-not-an-executable")
-    async with missing:
-        with pytest.raises(SandboxUnavailableError, match="executable not found"):
-            await missing.execute("echo ok", cwd=tmp_path)
+    missing = LocalShellRunner(shell="definitely-not-an-executable")
+    with pytest.raises(CommandUnavailableError, match="executable not found"):
+        await missing.execute("echo ok", cwd=tmp_path)
 
 
 def test_docker_builds_a_hardened_command(tmp_path: Path) -> None:
     extra = tmp_path / "read"
     extra.mkdir()
     policy = SandboxPolicy(
-        working_directory=tmp_path,
         readable_paths=(extra,),
         writable_paths=(tmp_path,),
         enable_network_access=False,
         limits=SandboxLimits(memory_bytes=1024, pids=8, cpus=0.5),
-        environment={"BASE": "one"},
     )
-    sandbox = DockerSandbox("python:3.14", policy)
+    sandbox = DockerSandbox(
+        "python:3.14",
+        defaults=CommandDefaults(tmp_path, environment={"BASE": "one"}),
+        policy=policy,
+    )
     argv = sandbox.build_open_argv(container_name="test-sandbox")
 
     assert argv[:4] == ("docker", "run", "--detach", "--rm")
@@ -201,7 +207,8 @@ def test_docker_supports_named_mounts_inherited_environment_and_user(
     output_mount = BindMount.read_write(output, "/output")
     sandbox = DockerSandbox(
         "cli:latest",
-        SandboxPolicy.for_workspace(workspace),
+        defaults=CommandDefaults(workspace),
+        policy=SandboxPolicy.for_workspace(workspace),
         mounts=(config_mount, output_mount),
         inherit_environment=("CLI_TOKEN", "CLI_TOKEN"),
         user="host",
@@ -231,7 +238,8 @@ def test_docker_supports_named_mounts_inherited_environment_and_user(
 def test_docker_supports_an_explicit_network_mode(tmp_path: Path) -> None:
     sandbox = DockerSandbox(
         "cli:latest",
-        SandboxPolicy.for_workspace(tmp_path, enable_network_access=True),
+        defaults=CommandDefaults(tmp_path),
+        policy=SandboxPolicy.for_workspace(tmp_path, enable_network_access=True),
         network_mode=DockerNetworkMode.HOST,
     )
 
@@ -286,7 +294,8 @@ def test_docker_validates_convenience_configuration(
     monkeypatch.delenv("MISSING_CLI_TOKEN", raising=False)
     sandbox = DockerSandbox(
         "image",
-        SandboxPolicy.for_workspace(workspace),
+        defaults=CommandDefaults(workspace),
+        policy=SandboxPolicy.for_workspace(workspace),
         inherit_environment=("MISSING_CLI_TOKEN",),
     )
     with pytest.raises(ValueError, match="MISSING_CLI_TOKEN"):
@@ -294,7 +303,8 @@ def test_docker_validates_convenience_configuration(
 
     collision = DockerSandbox(
         "image",
-        SandboxPolicy.for_workspace(workspace),
+        defaults=CommandDefaults(workspace),
+        policy=SandboxPolicy.for_workspace(workspace),
         mounts=(BindMount.read_only(first, "/workspace"),),
     )
     with pytest.raises(ValueError, match="used by both"):
@@ -306,12 +316,13 @@ def test_docker_validates_image_mounts_and_default_cwd(tmp_path: Path) -> None:
         DockerSandbox(" ")
 
     missing = tmp_path / "missing"
-    policy = SandboxPolicy(
-        working_directory=tmp_path,
-        readable_paths=(missing,),
-    )
+    policy = SandboxPolicy(readable_paths=(tmp_path, missing))
     with pytest.raises(FileNotFoundError):
-        DockerSandbox("image", policy).build_open_argv()
+        DockerSandbox(
+            "image",
+            defaults=CommandDefaults(tmp_path),
+            policy=policy,
+        ).build_open_argv()
 
 
 @pytest.mark.asyncio
@@ -324,9 +335,9 @@ async def test_docker_cleans_up_a_timed_out_container(
     async def fake_run_process(
         argv: tuple[str, ...],
         **_: object,
-    ) -> SandboxResult:
+    ) -> CommandResult:
         calls.append(argv)
-        return SandboxResult(
+        return CommandResult(
             "command",
             -1 if argv[1] == "exec" else 0,
             "",
@@ -336,13 +347,17 @@ async def test_docker_cleans_up_a_timed_out_container(
         )
 
     monkeypatch.setattr(docker_backend, "run_process", fake_run_process)
-    sandbox = DockerSandbox("image", SandboxPolicy.for_workspace(tmp_path))
+    sandbox = DockerSandbox(
+        "image",
+        defaults=CommandDefaults(tmp_path),
+        policy=SandboxPolicy.for_workspace(tmp_path),
+    )
     await sandbox.open()
     result = await sandbox.execute("sleep 100")
 
     assert result.timed_out
     assert not sandbox.is_open
-    assert sandbox.policy.working_directory == tmp_path.resolve()
+    assert sandbox.defaults.working_directory == tmp_path.resolve()
     assert calls[0][1] == "run"
     name = calls[0][calls[0].index("--name") + 1]
     assert calls[1][1:3] == ("exec", "--workdir")
@@ -359,17 +374,18 @@ async def test_docker_reuses_one_container_for_multiple_commands(
     async def fake_run_process(
         argv: tuple[str, ...],
         **kwargs: object,
-    ) -> SandboxResult:
+    ) -> CommandResult:
         calls.append(argv)
-        return SandboxResult(str(kwargs["command"]), 0, "ok", "", 0.01)
+        return CommandResult(str(kwargs["command"]), 0, "ok", "", 0.01)
 
     monkeypatch.setattr(docker_backend, "run_process", fake_run_process)
     sandbox = DockerSandbox(
         "image",
-        SandboxPolicy.for_workspace(tmp_path, environment={"BASE": "one"}),
+        defaults=CommandDefaults(tmp_path, environment={"BASE": "one"}),
+        policy=SandboxPolicy.for_workspace(tmp_path),
     )
 
-    with pytest.raises(SandboxStateError, match="not open"):
+    with pytest.raises(DockerSandboxStateError, match="not open"):
         await sandbox.execute("true")
 
     async with sandbox:
@@ -384,7 +400,7 @@ async def test_docker_reuses_one_container_for_multiple_commands(
         )
         assert first.ok and second.ok
 
-        with pytest.raises(SandboxStateError, match="already open"):
+        with pytest.raises(DockerSandboxStateError, match="already open"):
             await sandbox.open()
 
     assert not sandbox.is_open
@@ -403,14 +419,18 @@ async def test_docker_preserves_unavailable_error_without_cleanup(
 ) -> None:
     calls = 0
 
-    async def unavailable(*_: object, **__: object) -> SandboxResult:
+    async def unavailable(*_: object, **__: object) -> CommandResult:
         nonlocal calls
         calls += 1
-        raise SandboxUnavailableError("missing")
+        raise CommandUnavailableError("missing")
 
     monkeypatch.setattr(docker_backend, "run_process", unavailable)
-    sandbox = DockerSandbox("image", SandboxPolicy.for_workspace(tmp_path))
-    with pytest.raises(SandboxUnavailableError):
+    sandbox = DockerSandbox(
+        "image",
+        defaults=CommandDefaults(tmp_path),
+        policy=SandboxPolicy.for_workspace(tmp_path),
+    )
+    with pytest.raises(CommandUnavailableError):
         await sandbox.open()
     assert calls == 1
     assert not sandbox.is_open
@@ -422,9 +442,11 @@ def test_bubblewrap_builds_policy_and_rejects_unsupported_limits(
     policy = SandboxPolicy.for_workspace(
         tmp_path,
         enable_network_access=True,
-        environment={"NAME": "value"},
     )
-    sandbox = BubblewrapSandbox(policy)
+    sandbox = BubblewrapSandbox(
+        defaults=CommandDefaults(tmp_path, environment={"NAME": "value"}),
+        policy=policy,
+    )
     argv = sandbox.build_argv("echo ok")
     assert "--unshare-all" in argv
     assert "--share-net" in argv
@@ -440,7 +462,9 @@ def test_bubblewrap_builds_policy_and_rejects_unsupported_limits(
         limits=SandboxLimits(memory_bytes=1024),
     )
     with pytest.raises(ValueError, match="cannot enforce"):
-        BubblewrapSandbox(limited).build_argv("true")
+        BubblewrapSandbox(
+            defaults=CommandDefaults(tmp_path), policy=limited
+        ).build_argv("true")
 
 
 @pytest.mark.asyncio
@@ -448,10 +472,10 @@ async def test_bubblewrap_reports_unavailable_when_not_installed(
     tmp_path: Path,
 ) -> None:
     sandbox = BubblewrapSandbox(
-        SandboxPolicy.for_workspace(tmp_path),
+        defaults=CommandDefaults(tmp_path),
+        policy=SandboxPolicy.for_workspace(tmp_path),
         executable="definitely-not-bwrap",
     )
     assert not sandbox.available
-    async with sandbox:
-        with pytest.raises(SandboxUnavailableError, match="only available"):
-            await sandbox.execute("true")
+    with pytest.raises(CommandUnavailableError, match="only available"):
+        await sandbox.execute("true")

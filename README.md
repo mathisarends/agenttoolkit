@@ -377,6 +377,7 @@ from pathlib import Path
 
 from agenttoolkit.builtins import (
     BindMount,
+    CommandDefaults,
     DockerSandbox,
     LocalWorkspace,
     SandboxPolicy,
@@ -399,7 +400,8 @@ policy = SandboxPolicy.for_workspace(
 )
 sandbox = DockerSandbox(
     "my-cli:latest",
-    policy,
+    defaults=CommandDefaults(working_directory=workspace.root),
+    policy=policy,
     inherit_environment=("MY_CLI_TOKEN",),
     mounts=(
         BindMount.read_only(cli_config, "/home/agent/.config/my-cli"),
@@ -417,21 +419,25 @@ POSIX path, directory and symlink flags, size, and modification time. Local
 reads and writes are confined to the workspace root and bounded by a
 configurable file-size limit.
 
-The `Sandbox` port returns a common `SandboxResult` from all backends.
-`SandboxPolicy` controls readable and writable paths, network access,
-environment values, timeout, captured output, memory, process, and CPU limits.
-Every sandbox has an explicit async lifecycle: call `open()` before `execute()`
-and `close()` afterwards, or use `async with` as above. `DockerSandbox` starts
-one container in `open()`, tunnels every command through `docker exec`, and
-removes the container in `close()`. This preserves container state and avoids
-paying container startup latency for every command.
+The `CommandRunner` port returns a common `CommandResult` from local and
+isolated backends. `CommandDefaults` configures the working directory,
+environment, timeout, and captured-output limit. `SandboxPolicy` is separate
+and contains only isolation requirements: readable and writable paths, network
+access, memory, process, and CPU limits. A sandbox backend must enforce every
+requested isolation setting or reject it.
+
+Only backends that own persistent resources expose a lifecycle.
+`DockerSandbox` supports `open()`/`close()` and `async with`, starts one
+container, tunnels every command through `docker exec`, and removes the
+container afterwards. This preserves container state and avoids paying
+container startup latency for every command.
 If a Docker command times out, the sandbox removes the container to guarantee
 that no detached process keeps running; call `open()` again before continuing.
 
-`DockerSandbox` enforces all of these resource limits; `BubblewrapSandbox`
-supports filesystem/network isolation and host-side timeout/output limits.
-`UnsafeLocalSandbox` is useful for trusted commands but deliberately does not
-claim to enforce path or network isolation.
+`DockerSandbox` enforces all sandbox resource limits. `BubblewrapSandbox`
+supports filesystem and network isolation and rejects unsupported resource
+limits. `LocalShellRunner` executes trusted commands directly and accepts no
+`SandboxPolicy`, so it makes no isolation claim.
 
 `DockerSandbox` also supports named bind mounts and an explicit allowlist of
 host environment variables. `BindMount.read_write(...)` writes directly back
@@ -439,7 +445,7 @@ to the host. `inherit_environment` fails fast when a requested variable is
 missing and forwards its name without embedding the secret value in the
 generated Docker arguments. On POSIX hosts, `user="host"` maps the container
 process to the host UID and GID so generated files remain owned by the
-developer. Use `environment={...}` on `SandboxPolicy` or `env={...}` on
+developer. Use `environment={...}` on `CommandDefaults` or `env={...}` on
 `execute(...)` for explicit values and per-call overrides.
 
 ## Skills
