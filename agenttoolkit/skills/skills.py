@@ -19,7 +19,7 @@ class Skills:
         self._fingerprint = self._source_fingerprint()
 
     @classmethod
-    def from_local_dir(cls, *paths: str | Path) -> Self:
+    def from_dir(cls, *paths: str | Path) -> Self:
         return cls(paths)
 
     @property

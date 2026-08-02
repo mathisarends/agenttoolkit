@@ -47,7 +47,7 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    skills = Skills.from_local_dir(SKILLS_DIR)
+    skills = Skills.from_dir(SKILLS_DIR)
     workspace = LocalWorkspace(
         experiment_workspace("connected"),
         mounts={CONTAINER_SKILLS_DIR: SKILLS_DIR},

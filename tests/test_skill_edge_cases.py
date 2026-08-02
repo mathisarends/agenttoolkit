@@ -131,11 +131,11 @@ def test_skills_reject_empty_missing_and_file_roots(tmp_path: Path) -> None:
     file_root.write_text("not a directory", encoding="utf-8")
 
     with pytest.raises(ValueError, match="At least one"):
-        Skills.from_local_dir()
+        Skills.from_dir()
     with pytest.raises(ValueError, match="does not exist"):
-        Skills.from_local_dir(tmp_path / "missing")
+        Skills.from_dir(tmp_path / "missing")
     with pytest.raises(ValueError, match="must be a directory"):
-        Skills.from_local_dir(file_root)
+        Skills.from_dir(file_root)
 
 
 def test_duplicate_skill_uses_later_root_and_logs_warning(
@@ -151,7 +151,7 @@ def test_duplicate_skill_uses_later_root_and_logs_warning(
     )
 
     with caplog.at_level(logging.WARNING):
-        skills = Skills.from_local_dir(first, second)
+        skills = Skills.from_dir(first, second)
 
     assert skills.get("internet-research").directory == latest.resolve()
     assert skills.directories == (latest.resolve(),)
@@ -159,7 +159,7 @@ def test_duplicate_skill_uses_later_root_and_logs_warning(
 
 
 def test_missing_skill_lists_available_names(tmp_path: Path) -> None:
-    skills = Skills.from_local_dir(make_skill(tmp_path).parent)
+    skills = Skills.from_dir(make_skill(tmp_path).parent)
 
     with pytest.raises(
         ValueError,
@@ -170,7 +170,7 @@ def test_missing_skill_lists_available_names(tmp_path: Path) -> None:
 
 def test_load_refreshes_instructions_from_disk(tmp_path: Path) -> None:
     directory = make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     (directory / "SKILL.md").write_text(
         skill_source(instructions="# Research\n\nUse the updated workflow."),
         encoding="utf-8",
@@ -183,7 +183,7 @@ def test_load_refreshes_instructions_from_disk(tmp_path: Path) -> None:
 
 def test_load_rejects_skill_renamed_after_discovery(tmp_path: Path) -> None:
     directory = make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     (directory / "SKILL.md").write_text(
         skill_source(name="different-name"),
         encoding="utf-8",
@@ -197,7 +197,7 @@ def test_refresh_keeps_previous_registry_when_discovery_fails(
     tmp_path: Path,
 ) -> None:
     make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     make_skill(tmp_path, name="broken", source="# Missing frontmatter")
 
     with pytest.raises(ValueError, match="must start with YAML frontmatter"):

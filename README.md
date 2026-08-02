@@ -456,7 +456,7 @@ its parent directory name.
 ```python
 from agenttoolkit import Skills
 
-skills = Skills.from_local_dir("./skills")
+skills = Skills.from_dir("./skills")
 
 # Render the compact skill listing for the agent's system prompt.
 system_prompt = f"You are helpful.\n\n{skills.render_prompt()}"
@@ -477,7 +477,7 @@ output = await run_process(
 )
 ```
 
-`Skills.from_local_dir` accepts multiple directories; a skill discovered
+`Skills.from_dir` accepts multiple directories; a skill discovered
 later overrides one with the same name from an earlier directory (logged as
 a warning). `SKILL.md` is re-parsed from disk on each `load`, so instructions
 can be edited without restarting the process. `refresh()` rebuilds the registry

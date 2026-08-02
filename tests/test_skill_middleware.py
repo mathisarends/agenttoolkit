@@ -40,7 +40,7 @@ def make_skill(root: Path, name: str = "existing") -> Path:
 @pytest.mark.asyncio
 async def test_writing_tool_refreshes_and_returns_new_catalog(tmp_path: Path) -> None:
     make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     tools = Tools(
         context=ToolContext(skills),
         middleware=[SkillRefreshMiddleware()],
@@ -63,7 +63,7 @@ async def test_tool_without_write_effect_does_not_refresh_registry(
     tmp_path: Path,
 ) -> None:
     make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     tools = Tools(
         context=ToolContext(skills),
         middleware=[SkillRefreshMiddleware()],
@@ -83,7 +83,7 @@ async def test_tool_without_write_effect_does_not_refresh_registry(
 @pytest.mark.asyncio
 async def test_custom_predicate_selects_tools(tmp_path: Path) -> None:
     make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     tools = Tools(
         context=ToolContext(skills),
         middleware=[
@@ -108,7 +108,7 @@ async def test_invalid_edit_reports_error_and_keeps_active_registry(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     directory = make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     tools = Tools(
         context=ToolContext(skills),
         middleware=[SkillRefreshMiddleware()],
@@ -137,7 +137,7 @@ async def test_failed_writing_tool_still_reports_catalog_update(
     tmp_path: Path,
 ) -> None:
     make_skill(tmp_path)
-    skills = Skills.from_local_dir(tmp_path)
+    skills = Skills.from_dir(tmp_path)
     tools = Tools(
         context=ToolContext(skills),
         middleware=[SkillRefreshMiddleware()],
@@ -173,8 +173,8 @@ async def test_per_call_context_selects_the_refreshed_registry(
     second_root = tmp_path / "second"
     make_skill(first_root)
     make_skill(second_root)
-    first = Skills.from_local_dir(first_root)
-    second = Skills.from_local_dir(second_root)
+    first = Skills.from_dir(first_root)
+    second = Skills.from_dir(second_root)
     tools = Tools(
         context=ToolContext(first),
         middleware=[SkillRefreshMiddleware()],

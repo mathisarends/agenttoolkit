@@ -37,7 +37,7 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    skills = Skills.from_local_dir(SKILLS_DIR)
+    skills = Skills.from_dir(SKILLS_DIR)
     sandbox = workspace_sandbox(
         experiment_workspace("bash-and-skills"),
         mounts=(BindMount.read_only(SKILLS_DIR, CONTAINER_SKILLS_DIR),),

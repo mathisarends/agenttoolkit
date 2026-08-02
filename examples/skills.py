@@ -26,7 +26,7 @@ def _make_skills_dir(root: Path) -> Path:
 def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         skills_root = _make_skills_dir(Path(tmp))
-        skills = Skills.from_local_dir(skills_root)
+        skills = Skills.from_dir(skills_root)
 
         # A short catalog an agent can see up front, before deciding to load
         # any particular skill's full instructions.
