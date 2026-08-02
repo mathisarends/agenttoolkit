@@ -8,7 +8,8 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from types import TracebackType
+from typing import Protocol, Self, runtime_checkable
 
 from agenttoolkit.builtins.shell.policy import SandboxPolicy
 
@@ -18,6 +19,10 @@ class SandboxError(Exception):
 
 
 class SandboxUnavailableError(SandboxError):
+    pass
+
+
+class SandboxStateError(SandboxError):
     pass
 
 
@@ -73,6 +78,13 @@ class Sandbox(Protocol):
     @property
     def policy(self) -> SandboxPolicy: ...
 
+    @property
+    def is_open(self) -> bool: ...
+
+    async def open(self) -> None: ...
+
+    async def close(self) -> None: ...
+
     async def execute(
         self,
         command: str,
@@ -82,6 +94,52 @@ class Sandbox(Protocol):
         stdin: str | bytes | None = None,
         timeout: float | None = None,
     ) -> SandboxResult: ...
+
+    async def __aenter__(self) -> Self: ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
+
+
+class SandboxLifecycle:
+    """Common lifecycle for sandbox backends without persistent resources."""
+
+    def __init__(self) -> None:
+        self._is_open = False
+
+    @property
+    def is_open(self) -> bool:
+        return self._is_open
+
+    async def open(self) -> None:
+        if self._is_open:
+            raise SandboxStateError("sandbox is already open")
+        self._is_open = True
+
+    async def close(self) -> None:
+        self._is_open = False
+
+    def _require_open(self) -> None:
+        if not self._is_open:
+            raise SandboxStateError(
+                "sandbox is not open; call open() or use 'async with' first"
+            )
+
+    async def __aenter__(self) -> Self:
+        await self.open()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self.close()
 
 
 async def run_process(

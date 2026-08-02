@@ -30,7 +30,7 @@ def test_connected_sandbox_rejects_missing_forwarded_environment(
         ValueError,
         match=f"host environment variable is not set: {missing_name}",
     ):
-        sandbox.build_argv("true")
+        sandbox.build_open_argv()
 
 
 def test_connected_sandbox_uses_host_network(
@@ -41,7 +41,7 @@ def test_connected_sandbox_uses_host_network(
     for name in _CONNECTED_ENVIRONMENT:
         monkeypatch.setenv(name, "configured")
 
-    argv = connected_sandbox(tmp_path).build_argv("sonos discover")
+    argv = connected_sandbox(tmp_path).build_open_argv(container_name="test-sandbox")
 
     assert ("--network", "host") == argv[
         argv.index("--network") : argv.index("--network") + 2
@@ -66,7 +66,7 @@ def test_connected_sandbox_accepts_writable_mounts(
     )
 
     assert sandbox.mounts == (BindMount.read_write(skills, "/skills"),)
-    argv = sandbox.build_argv("touch /skills/new-skill")
+    argv = sandbox.build_open_argv(container_name="test-sandbox")
     specification = next(
         argv[index + 1]
         for index, argument in enumerate(argv)

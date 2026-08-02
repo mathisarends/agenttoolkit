@@ -90,7 +90,8 @@ async def main() -> None:
         if args.unsafe
         else f"sandboxed (docker: {DEFAULT_DOCKER_IMAGE})"
     )
-    await console.run(agent, f"Chat gestartet [{mode}]. 'exit' zum Beenden.")
+    async with sandbox:
+        await console.run(agent, f"Chat gestartet [{mode}]. 'exit' zum Beenden.")
 
 
 if __name__ == "__main__":

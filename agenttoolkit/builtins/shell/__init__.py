@@ -11,6 +11,7 @@ from .sandbox import (
     SandboxError,
     SandboxExecutionError,
     SandboxResult,
+    SandboxStateError,
     SandboxUnavailableError,
 )
 
@@ -25,6 +26,7 @@ __all__ = [
     "SandboxLimits",
     "SandboxPolicy",
     "SandboxResult",
+    "SandboxStateError",
     "SandboxUnavailableError",
     "UnsafeLocalSandbox",
 ]

@@ -17,6 +17,7 @@ from .shell import (
     SandboxLimits,
     SandboxPolicy,
     SandboxResult,
+    SandboxStateError,
     SandboxUnavailableError,
     UnsafeLocalSandbox,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "SandboxLimits",
     "SandboxPolicy",
     "SandboxResult",
+    "SandboxStateError",
     "SandboxUnavailableError",
     "Todo",
     "TodoError",

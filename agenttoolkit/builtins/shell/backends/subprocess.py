@@ -3,10 +3,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from agenttoolkit.builtins.shell.policy import SandboxPolicy
-from agenttoolkit.builtins.shell.sandbox import SandboxResult, run_process
+from agenttoolkit.builtins.shell.sandbox import (
+    SandboxLifecycle,
+    SandboxResult,
+    run_process,
+)
 
 
-class UnsafeLocalSandbox:
+class UnsafeLocalSandbox(SandboxLifecycle):
     """Runs locally; path and network policy fields are intentionally not enforced."""
 
     def __init__(
@@ -16,6 +20,7 @@ class UnsafeLocalSandbox:
         shell: str = "bash",
         shell_arguments: Sequence[str] = ("-lc",),
     ) -> None:
+        super().__init__()
         self._policy = policy or SandboxPolicy(enable_network_access=True)
         self._shell = shell
         self._shell_arguments = tuple(shell_arguments)
@@ -33,6 +38,7 @@ class UnsafeLocalSandbox:
         stdin: str | bytes | None = None,
         timeout: float | None = None,
     ) -> SandboxResult:
+        self._require_open()
         if not command:
             raise ValueError("command must not be empty")
 

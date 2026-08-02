@@ -15,6 +15,7 @@ from agenttoolkit.builtins.shell import (
     SandboxLimits,
     SandboxPolicy,
     SandboxResult,
+    SandboxStateError,
     SandboxUnavailableError,
     UnsafeLocalSandbox,
 )
@@ -111,13 +112,13 @@ async def test_unsafe_local_sandbox_executes_and_enforces_output_limit(
         shell_arguments=("-c",),
     )
     assert isinstance(sandbox, Sandbox)
-
-    result = await sandbox.execute(
-        "import os,sys; print(os.environ['FROM_POLICY']); "
-        "print(os.environ['EXTRA']); print(sys.stdin.read())",
-        env={"EXTRA": "ok"},
-        stdin="input",
-    )
+    async with sandbox:
+        result = await sandbox.execute(
+            "import os,sys; print(os.environ['FROM_POLICY']); "
+            "print(os.environ['EXTRA']); print(sys.stdin.read())",
+            env={"EXTRA": "ok"},
+            stdin="input",
+        )
     assert result.ok
     assert result.output_truncated
     assert len(result.stdout.encode()) <= 3
@@ -135,18 +136,20 @@ async def test_unsafe_local_sandbox_timeout_errors_and_validation(
         shell=sys.executable,
         shell_arguments=("-c",),
     )
-    result = await sandbox.execute("import time; time.sleep(1)")
-    assert result.timed_out
-    assert not result.ok
+    async with sandbox:
+        result = await sandbox.execute("import time; time.sleep(1)")
+        assert result.timed_out
+        assert not result.ok
 
-    with pytest.raises(ValueError, match="must not be empty"):
-        await sandbox.execute("")
-    with pytest.raises(ValueError, match="positive"):
-        await sandbox.execute("pass", timeout=0)
+        with pytest.raises(ValueError, match="must not be empty"):
+            await sandbox.execute("")
+        with pytest.raises(ValueError, match="positive"):
+            await sandbox.execute("pass", timeout=0)
 
     missing = UnsafeLocalSandbox(shell="definitely-not-an-executable")
-    with pytest.raises(SandboxUnavailableError, match="executable not found"):
-        await missing.execute("echo ok", cwd=tmp_path)
+    async with missing:
+        with pytest.raises(SandboxUnavailableError, match="executable not found"):
+            await missing.execute("echo ok", cwd=tmp_path)
 
 
 def test_docker_builds_a_hardened_command(tmp_path: Path) -> None:
@@ -161,13 +164,9 @@ def test_docker_builds_a_hardened_command(tmp_path: Path) -> None:
         environment={"BASE": "one"},
     )
     sandbox = DockerSandbox("python:3.14", policy)
-    argv = sandbox.build_argv(
-        "python -V",
-        env={"EXTRA": "two"},
-        interactive=True,
-    )
+    argv = sandbox.build_open_argv(container_name="test-sandbox")
 
-    assert argv[:3] == ("docker", "run", "--rm")
+    assert argv[:4] == ("docker", "run", "--detach", "--rm")
     assert "--read-only" in argv
     assert ("--network", "none") == argv[
         argv.index("--network") : argv.index("--network") + 2
@@ -175,10 +174,12 @@ def test_docker_builds_a_hardened_command(tmp_path: Path) -> None:
     assert "--memory" in argv
     assert "--pids-limit" in argv
     assert "--cpus" in argv
-    assert "-i" in argv
     assert "BASE=one" in argv
-    assert "EXTRA=two" in argv
-    assert argv[-1] == "python -V"
+    assert argv[-3:] == (
+        "/bin/sh",
+        "-c",
+        "while :; do sleep 3600; done",
+    )
     assert str(sandbox.container_path("read")) == "/mnt/path-0"
 
 
@@ -205,7 +206,7 @@ def test_docker_supports_named_mounts_inherited_environment_and_user(
         inherit_environment=("CLI_TOKEN", "CLI_TOKEN"),
         user="host",
     )
-    argv = sandbox.build_argv("my-cli build")
+    argv = sandbox.build_open_argv(container_name="test-sandbox")
 
     assert sandbox.mounts == (config_mount, output_mount)
     assert sandbox.inherit_environment == ("CLI_TOKEN",)
@@ -234,7 +235,7 @@ def test_docker_supports_an_explicit_network_mode(tmp_path: Path) -> None:
         network_mode=DockerNetworkMode.HOST,
     )
 
-    argv = sandbox.build_argv("cli status")
+    argv = sandbox.build_open_argv(container_name="test-sandbox")
 
     assert sandbox.network_mode is DockerNetworkMode.HOST
     assert ("--network", "host") == argv[
@@ -289,7 +290,7 @@ def test_docker_validates_convenience_configuration(
         inherit_environment=("MISSING_CLI_TOKEN",),
     )
     with pytest.raises(ValueError, match="MISSING_CLI_TOKEN"):
-        sandbox.build_argv("true")
+        sandbox.build_open_argv()
 
     collision = DockerSandbox(
         "image",
@@ -297,21 +298,12 @@ def test_docker_validates_convenience_configuration(
         mounts=(BindMount.read_only(first, "/workspace"),),
     )
     with pytest.raises(ValueError, match="used by both"):
-        collision.build_argv("true")
+        collision.build_open_argv()
 
 
-def test_docker_validates_image_command_mounts_and_cwd(tmp_path: Path) -> None:
+def test_docker_validates_image_mounts_and_default_cwd(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="image"):
         DockerSandbox(" ")
-
-    sandbox = DockerSandbox("image", SandboxPolicy.for_workspace(tmp_path))
-    with pytest.raises(ValueError, match="command"):
-        sandbox.build_argv("")
-
-    outside = tmp_path.parent / "outside"
-    outside.mkdir(exist_ok=True)
-    with pytest.raises(PermissionError):
-        sandbox.build_argv("pwd", cwd=outside)
 
     missing = tmp_path / "missing"
     policy = SandboxPolicy(
@@ -319,7 +311,7 @@ def test_docker_validates_image_command_mounts_and_cwd(tmp_path: Path) -> None:
         readable_paths=(missing,),
     )
     with pytest.raises(FileNotFoundError):
-        DockerSandbox("image", policy).build_argv("true", cwd=tmp_path)
+        DockerSandbox("image", policy).build_open_argv()
 
 
 @pytest.mark.asyncio
@@ -336,22 +328,72 @@ async def test_docker_cleans_up_a_timed_out_container(
         calls.append(argv)
         return SandboxResult(
             "command",
-            1,
+            -1 if argv[1] == "exec" else 0,
             "",
             "",
             1,
-            timed_out=argv[1] == "run",
+            timed_out=argv[1] == "exec",
         )
 
     monkeypatch.setattr(docker_backend, "run_process", fake_run_process)
     sandbox = DockerSandbox("image", SandboxPolicy.for_workspace(tmp_path))
+    await sandbox.open()
     result = await sandbox.execute("sleep 100")
 
     assert result.timed_out
+    assert not sandbox.is_open
     assert sandbox.policy.working_directory == tmp_path.resolve()
     assert calls[0][1] == "run"
     name = calls[0][calls[0].index("--name") + 1]
-    assert calls[1] == ("docker", "rm", "--force", name)
+    assert calls[1][1:3] == ("exec", "--workdir")
+    assert calls[2] == ("docker", "rm", "--force", name)
+
+
+@pytest.mark.asyncio
+async def test_docker_reuses_one_container_for_multiple_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_run_process(
+        argv: tuple[str, ...],
+        **kwargs: object,
+    ) -> SandboxResult:
+        calls.append(argv)
+        return SandboxResult(str(kwargs["command"]), 0, "ok", "", 0.01)
+
+    monkeypatch.setattr(docker_backend, "run_process", fake_run_process)
+    sandbox = DockerSandbox(
+        "image",
+        SandboxPolicy.for_workspace(tmp_path, environment={"BASE": "one"}),
+    )
+
+    with pytest.raises(SandboxStateError, match="not open"):
+        await sandbox.execute("true")
+
+    async with sandbox:
+        name = sandbox.container_name
+        assert name is not None
+        assert sandbox.is_open
+        first = await sandbox.execute("echo first")
+        second = await sandbox.execute(
+            "echo second",
+            env={"EXTRA": "two"},
+            stdin="input",
+        )
+        assert first.ok and second.ok
+
+        with pytest.raises(SandboxStateError, match="already open"):
+            await sandbox.open()
+
+    assert not sandbox.is_open
+    assert sandbox.container_name is None
+    assert [call[1] for call in calls] == ["run", "exec", "exec", "rm"]
+    assert all(name in call for call in calls)
+    assert "BASE=one" in calls[0]
+    assert "EXTRA=two" in calls[2]
+    assert "--interactive" in calls[2]
 
 
 @pytest.mark.asyncio
@@ -369,8 +411,9 @@ async def test_docker_preserves_unavailable_error_without_cleanup(
     monkeypatch.setattr(docker_backend, "run_process", unavailable)
     sandbox = DockerSandbox("image", SandboxPolicy.for_workspace(tmp_path))
     with pytest.raises(SandboxUnavailableError):
-        await sandbox.execute("true")
+        await sandbox.open()
     assert calls == 1
+    assert not sandbox.is_open
 
 
 def test_bubblewrap_builds_policy_and_rejects_unsupported_limits(
@@ -409,5 +452,6 @@ async def test_bubblewrap_reports_unavailable_when_not_installed(
         executable="definitely-not-bwrap",
     )
     assert not sandbox.available
-    with pytest.raises(SandboxUnavailableError, match="only available"):
-        await sandbox.execute("true")
+    async with sandbox:
+        with pytest.raises(SandboxUnavailableError, match="only available"):
+            await sandbox.execute("true")

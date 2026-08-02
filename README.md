@@ -407,7 +407,8 @@ sandbox = DockerSandbox(
     ),
     user="host",
 )
-result = await sandbox.execute("my-cli build --output /output")
+async with sandbox:
+    result = await sandbox.execute("my-cli build --output /output")
 ```
 
 The `Workspace` port provides `read_file`, `write_file`, `edit_file`, `glob`,
@@ -419,6 +420,14 @@ configurable file-size limit.
 The `Sandbox` port returns a common `SandboxResult` from all backends.
 `SandboxPolicy` controls readable and writable paths, network access,
 environment values, timeout, captured output, memory, process, and CPU limits.
+Every sandbox has an explicit async lifecycle: call `open()` before `execute()`
+and `close()` afterwards, or use `async with` as above. `DockerSandbox` starts
+one container in `open()`, tunnels every command through `docker exec`, and
+removes the container in `close()`. This preserves container state and avoids
+paying container startup latency for every command.
+If a Docker command times out, the sandbox removes the container to guarantee
+that no detached process keeps running; call `open()` again before continuing.
+
 `DockerSandbox` enforces all of these resource limits; `BubblewrapSandbox`
 supports filesystem/network isolation and host-side timeout/output limits.
 `UnsafeLocalSandbox` is useful for trusted commands but deliberately does not

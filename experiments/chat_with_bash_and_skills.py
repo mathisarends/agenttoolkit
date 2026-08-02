@@ -61,11 +61,12 @@ async def main() -> None:
         on_tool_call=console.on_tool_call,
         on_tool_result=console.on_tool_result,
     )
-    await console.run(
-        agent,
-        f"Skills-Chat gestartet [{', '.join(skills.names())}]. " "'exit' zum Beenden.",
-        prompt=args.prompt,
-    )
+    async with sandbox:
+        await console.run(
+            agent,
+            f"Skills-Chat gestartet [{', '.join(skills.names())}]. 'exit' zum Beenden.",
+            prompt=args.prompt,
+        )
 
 
 if __name__ == "__main__":

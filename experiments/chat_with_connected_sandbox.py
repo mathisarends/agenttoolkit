@@ -83,14 +83,15 @@ async def main() -> None:
         on_tool_result=console.on_tool_result,
     )
 
-    await console.run(
-        agent,
-        (
-            "Connected chat gestartet "
-            f"[openhue, sonos, spogo; Skills: {', '.join(skills.names())}]. "
-            "'exit' zum Beenden."
-        ),
-    )
+    async with sandbox:
+        await console.run(
+            agent,
+            (
+                "Connected chat gestartet "
+                f"[openhue, sonos, spogo; Skills: {', '.join(skills.names())}]. "
+                "'exit' zum Beenden."
+            ),
+        )
 
 
 if __name__ == "__main__":

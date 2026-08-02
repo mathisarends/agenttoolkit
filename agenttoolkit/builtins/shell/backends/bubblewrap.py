@@ -5,13 +5,14 @@ from pathlib import Path
 
 from agenttoolkit.builtins.shell.policy import SandboxPolicy
 from agenttoolkit.builtins.shell.sandbox import (
+    SandboxLifecycle,
     SandboxResult,
     SandboxUnavailableError,
     run_process,
 )
 
 
-class BubblewrapSandbox:
+class BubblewrapSandbox(SandboxLifecycle):
     def __init__(
         self,
         policy: SandboxPolicy | None = None,
@@ -20,6 +21,7 @@ class BubblewrapSandbox:
         shell: str = "/bin/sh",
         shell_arguments: Sequence[str] = ("-lc",),
     ) -> None:
+        super().__init__()
         self._policy = policy or SandboxPolicy()
         self._executable = executable
         self._shell = shell
@@ -42,6 +44,7 @@ class BubblewrapSandbox:
         stdin: str | bytes | None = None,
         timeout: float | None = None,
     ) -> SandboxResult:
+        self._require_open()
         if not self.available:
             raise SandboxUnavailableError(
                 "bubblewrap is only available on Linux with bwrap installed"
