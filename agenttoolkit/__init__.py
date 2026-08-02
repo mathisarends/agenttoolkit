@@ -6,6 +6,8 @@ from .skills import (
     parse_skill,
 )
 from .tools import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
     Inject,
     SkillRefreshMiddleware,
     Tool,
@@ -24,9 +26,12 @@ from .tools import (
     description_from_context,
     provided,
     requires,
+    standard_middleware,
 )
 
 __all__ = [
+    "CallLoggingMiddleware",
+    "ErrorBoundaryMiddleware",
     "Inject",
     "LoadedSkill",
     "Skill",
@@ -50,4 +55,5 @@ __all__ = [
     "parse_skill",
     "provided",
     "requires",
+    "standard_middleware",
 ]

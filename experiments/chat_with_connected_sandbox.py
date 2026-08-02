@@ -5,8 +5,7 @@ from pathlib import Path, PurePosixPath
 from agenttoolkit import SkillRefreshMiddleware, Skills
 from agenttoolkit.builtins.fs import LocalWorkspace
 from agenttoolkit.builtins.shell import BindMount
-from agenttoolkit.tools import ToolContext, Tools
-from agenttoolkit.tools.middleware import CallLoggingMiddleware
+from agenttoolkit.tools import ToolContext, Tools, standard_middleware
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model
@@ -59,10 +58,7 @@ async def main() -> None:
     )
     tools = Tools(
         context=ToolContext(sandbox, skills, workspace),
-        middleware=[
-            SkillRefreshMiddleware(),
-            CallLoggingMiddleware(),
-        ],
+        middleware=(*standard_middleware(), SkillRefreshMiddleware()),
     )
     register_skill_loader(tools, container_root=CONTAINER_SKILLS_DIR)
     register_file_tools(tools)

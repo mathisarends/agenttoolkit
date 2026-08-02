@@ -36,8 +36,8 @@ it is a building block, not a framework.
   application services without the model ever seeing them.
 - Conditional tool availability and dynamic, context-aware descriptions.
 - Sync and async tool execution behind a single async API.
-- A composable middleware pipeline (error boundary, resolution, validation,
-  logging) that applications can extend or replace.
+- A composable, opt-in middleware pipeline with provided error-boundary and
+  logging middleware; no middleware is installed implicitly.
 - Thin, dependency-free schema adapters for OpenAI and Anthropic tool-call
   formats.
 - Tool implementations return their natural Python values; the execution
@@ -66,7 +66,13 @@ makes, and feed the result back:
 ```python
 from pydantic import BaseModel, Field
 
-from agenttoolkit import Inject, ToolContext, Tools, ToolSchemaFormat
+from agenttoolkit import (
+    Inject,
+    ToolContext,
+    Tools,
+    ToolSchemaFormat,
+    standard_middleware,
+)
 
 
 class SearchParams(BaseModel):
@@ -79,7 +85,10 @@ class SearchClient:
         return [query] * limit
 
 
-tools = Tools(context=ToolContext(SearchClient()))
+tools = Tools(
+    context=ToolContext(SearchClient()),
+    middleware=standard_middleware(),
+)
 
 
 @tools.action(
@@ -102,10 +111,10 @@ result: object = await tools.execute(
 # 3. Serialize the value and feed it back to the model.
 ```
 
-`tools.execute(...)` never raises for expected failures: an unknown tool name,
-invalid arguments, or an exception inside the tool all come back as an
-agent-readable `"Tool failed: ..."` string. The full exception is logged by
-the error-boundary middleware.
+Here `standard_middleware()` explicitly enables error handling and call
+logging. An unknown tool name, invalid arguments, or an exception inside the
+tool then comes back as an agent-readable `"Tool failed: ..."` string, while
+the full exception is logged.
 
 ## Defining tools
 
@@ -296,10 +305,11 @@ def get_weather(city: str) -> WeatherResult:
     return WeatherResult(city=city, temp_c=temp_c)
 ```
 
-Exceptions from resolution, validation, middleware, dependency injection, or
-the tool itself are logged and converted by the outer error boundary to an
-agent-readable string prefixed with `"Tool failed: "`. Consequently tool
-implementations need no toolkit-specific result import.
+With `standard_middleware()` enabled, exceptions from resolution, validation,
+middleware, dependency injection, or the tool itself are logged and converted
+to an agent-readable string prefixed with `"Tool failed: "`. Consequently tool
+implementations need no toolkit-specific result import. Without an error
+boundary, exceptions propagate to the caller normally.
 
 Because dispatch by name is dynamic and one registry can contain heterogeneous
 return types, the static return type of `Tools.execute()` is `object`. The
@@ -308,12 +318,17 @@ provider-specific metadata at that boundary.
 
 ## Middleware
 
-Every call passes through a fixed core — error boundary, tool resolution,
-argument validation — followed by call logging. Pass `middleware=` to run
-additional steps between the core and logging, e.g. a timeout:
+`Tools` never installs middleware implicitly. Tool resolution and argument
+validation are core execution mechanics performed when the middleware chain
+invokes the call. With `Tools()` alone, execution exceptions propagate
+normally.
+
+Use `standard_middleware()` when an agent loop should explicitly opt into the
+provided error boundary and call logging. Compose additional middleware in the
+same tuple, for example a timeout:
 
 ```python
-from agenttoolkit import ToolCall, ToolMiddleware
+from agenttoolkit import ToolCall, ToolMiddleware, standard_middleware
 
 
 class TimeoutMiddleware(ToolMiddleware):
@@ -324,12 +339,17 @@ class TimeoutMiddleware(ToolMiddleware):
         return await asyncio.wait_for(next(call), timeout=self._seconds)
 
 
-tools = Tools(middleware=[TimeoutMiddleware(5.0)])
+tools = Tools(
+    middleware=(*standard_middleware(), TimeoutMiddleware(5.0)),
+)
 ```
 
-Custom middleware runs *after* resolution and validation, so `call.tool` and
-`call.params` are already populated — which is what makes filtering on tool
-metadata (see `effects` above) possible.
+Custom middleware receives the raw `ToolCall` and wraps resolution, validation,
+dependency injection, and execution through `next(call)`. `call.raw_args`
+contains the model-provided arguments; `call.tool` contains the registered tool
+when the name exists. This keeps every execution stage inside the explicit
+chain, allowing an installed error boundary to translate any failure for the
+agent.
 
 ## Merging registries
 
@@ -487,11 +507,11 @@ result — so a newly added write tool is covered as soon as it declares its
 effect, with no list of tool names to keep in sync:
 
 ```python
-from agenttoolkit import SkillRefreshMiddleware
+from agenttoolkit import SkillRefreshMiddleware, standard_middleware
 
 tools = Tools(
     context=ToolContext(skills),
-    middleware=[SkillRefreshMiddleware()],
+    middleware=(*standard_middleware(), SkillRefreshMiddleware()),
 )
 ```
 

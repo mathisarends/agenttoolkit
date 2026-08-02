@@ -9,6 +9,7 @@ from agenttoolkit import (
     ToolContext,
     ToolEffect,
     Tools,
+    standard_middleware,
 )
 
 
@@ -139,7 +140,7 @@ async def test_failed_writing_tool_still_reports_catalog_update(
     skills = Skills.from_dir(tmp_path)
     tools = Tools(
         context=ToolContext(skills),
-        middleware=[SkillRefreshMiddleware()],
+        middleware=(*standard_middleware(), SkillRefreshMiddleware()),
     )
 
     @tools.action("Write and fail", effects=(ToolEffect.WRITES_WORKSPACE,))

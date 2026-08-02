@@ -12,6 +12,7 @@ from agenttoolkit import (
     ToolSchemaFormat,
     description_from_context,
     provided,
+    standard_middleware,
 )
 
 
@@ -56,7 +57,7 @@ async def test_register_validate_inject_and_execute() -> None:
 
 @pytest.mark.asyncio
 async def test_plain_signature_is_validated_and_sync_result_is_returned() -> None:
-    tools = Tools()
+    tools = Tools(middleware=standard_middleware())
 
     @tools.action("Add numbers")
     def add(a: int, b: int = 1) -> int:
@@ -162,7 +163,7 @@ def test_context_controls_availability_and_description() -> None:
 async def test_tool_errors_are_logged_and_returned_by_the_boundary(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    tools = Tools()
+    tools = Tools(middleware=standard_middleware())
 
     @tools.action("Fail internally")
     def internal_failure() -> None:
@@ -173,6 +174,18 @@ async def test_tool_errors_are_logged_and_returned_by_the_boundary(
 
     assert "Tool 'internal_failure' failed" in caplog.text
     assert result == "Tool failed: secret"
+
+
+@pytest.mark.asyncio
+async def test_tools_do_not_install_an_error_boundary_by_default() -> None:
+    tools = Tools()
+
+    @tools.action("Fail internally")
+    def internal_failure() -> None:
+        raise RuntimeError("secret")
+
+    with pytest.raises(RuntimeError, match="secret"):
+        await tools.execute("internal_failure")
 
 
 def test_duplicate_registration_and_status_validation() -> None:

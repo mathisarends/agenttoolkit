@@ -1,10 +1,8 @@
 import logging
 import time
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
-
-from pydantic import BaseModel
 
 from agenttoolkit.skills import Skills
 from agenttoolkit.tools.context import ToolContext
@@ -21,7 +19,6 @@ class ToolCall:
     raw_args: dict[str, Any]
     context: ToolContext | None = None
     tool: Tool | None = None
-    params: BaseModel | None = None
 
 
 type ToolHandler = Callable[[ToolCall], Awaitable[object]]
@@ -47,41 +44,6 @@ class ErrorBoundaryMiddleware(ToolMiddleware):
         except Exception as error:
             logger.exception("Tool '%s' failed", call.name)
             return f"Tool failed: {error}"
-
-
-class ToolResolutionMiddleware(ToolMiddleware):
-    def __init__(
-        self,
-        tools: Mapping[str, Tool],
-    ) -> None:
-        self._tools = tools
-
-    async def __call__(
-        self,
-        call: ToolCall,
-        next: ToolHandler,
-    ) -> object:
-        tool = self._tools.get(call.name)
-        if tool is None or not tool.is_available(call.context):
-            available = [
-                name
-                for name, candidate in self._tools.items()
-                if candidate.is_available(call.context)
-            ]
-            raise LookupError(f"Unknown tool '{call.name}'. Available: {available}")
-        return await next(replace(call, tool=tool))
-
-
-class ParamValidationMiddleware(ToolMiddleware):
-    async def __call__(
-        self,
-        call: ToolCall,
-        next: ToolHandler,
-    ) -> object:
-        if call.tool is None:
-            raise RuntimeError("Tool resolution must run before validation")
-        params = call.tool.input_model.model_validate(call.raw_args)
-        return await next(replace(call, params=params))
 
 
 class CallLoggingMiddleware(ToolMiddleware):
@@ -137,19 +99,9 @@ def compose(
     return handler
 
 
-def default_chain(
-    tools: Mapping[str, Tool],
-    inner: Sequence[ToolMiddleware] | None = None,
-) -> tuple[ToolMiddleware, ...]:
-    """Custom middleware runs inside the core so that `call.tool` and
-    `call.params` are already populated — filtering on tool metadata is only
-    possible after resolution.
-    """
+def standard_middleware() -> tuple[ToolMiddleware, ...]:
     return (
         ErrorBoundaryMiddleware(),
-        ToolResolutionMiddleware(tools),
-        ParamValidationMiddleware(),
-        *(inner or ()),
         CallLoggingMiddleware(),
     )
 

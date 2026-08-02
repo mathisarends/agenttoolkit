@@ -10,6 +10,7 @@ from agenttoolkit.tools import (
     Tools,
     description_from_context,
     requires,
+    standard_middleware,
 )
 from experiments.agent import Agent
 from experiments.environments import Console
@@ -24,7 +25,7 @@ class UserInfo:
 
 context_user = UserInfo(name="Mathis", is_admin=True)
 context = ToolContext(context_user)
-tools = Tools(context=context)
+tools = Tools(context=context, middleware=standard_middleware())
 
 
 @tools.action("Get the current date and time")

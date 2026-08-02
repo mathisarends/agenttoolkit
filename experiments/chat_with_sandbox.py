@@ -2,7 +2,7 @@ import argparse
 import asyncio
 
 from agenttoolkit.builtins.shell import BindMount
-from agenttoolkit.tools import ToolContext, Tools
+from agenttoolkit.tools import ToolContext, Tools, standard_middleware
 from experiments.agent import Agent
 from experiments.environments import Console
 from experiments.model import experiment_model
@@ -62,7 +62,10 @@ async def main() -> None:
         inherit_environment=args.inherit_env,
         mounts=mounts,
     ) as runner:
-        tools = Tools(context=ToolContext(runner))
+        tools = Tools(
+            context=ToolContext(runner),
+            middleware=standard_middleware(),
+        )
         register_shell_tool(
             tools,
             name="batch",

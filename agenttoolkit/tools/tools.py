@@ -10,7 +10,6 @@ from agenttoolkit.tools.middleware import (
     ToolCall,
     ToolMiddleware,
     compose,
-    default_chain,
 )
 from agenttoolkit.tools.models import (
     StatusFormatter,
@@ -31,10 +30,7 @@ class Tools:
     ) -> None:
         self._tools: dict[str, Tool] = {}
         self._context = context
-        self._handler = compose(
-            default_chain(self._tools, middleware),
-            self._invoke,
-        )
+        self._handler = compose(middleware or (), self._invoke)
 
     def action[ParamsT: BaseModel, **CallT, ResultT](
         self,
@@ -185,6 +181,7 @@ class Tools:
                 name=name,
                 raw_args=dict(arguments or {}),
                 context=self._context if context is None else context,
+                tool=self._tools.get(name),
             )
         )
 
@@ -199,7 +196,15 @@ class Tools:
         return len(self._tools)
 
     async def _invoke(self, call: ToolCall) -> object:
-        if call.tool is None or call.params is None:
-            raise RuntimeError("Tool pipeline did not resolve and validate the call")
-        arguments = resolve_arguments(call.tool, call.params, call.context)
-        return await call.tool.execute(arguments)
+        tool = call.tool
+        if tool is None or not tool.is_available(call.context):
+            available = [
+                candidate.name
+                for candidate in self._tools.values()
+                if candidate.is_available(call.context)
+            ]
+            raise LookupError(f"Unknown tool '{call.name}'. Available: {available}")
+
+        params = tool.input_model.model_validate(call.raw_args)
+        arguments = resolve_arguments(tool, params, call.context)
+        return await tool.execute(arguments)

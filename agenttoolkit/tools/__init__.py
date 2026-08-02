@@ -7,16 +7,21 @@ from .binding import (
 )
 from .context import Inject, ToolContext
 from .middleware import (
+    CallLoggingMiddleware,
+    ErrorBoundaryMiddleware,
     SkillRefreshMiddleware,
     ToolCall,
     ToolMiddleware,
     ToolPredicate,
+    standard_middleware,
 )
 from .models import Tool, ToolEffect, ToolMetadata, ToolSchemaFormat
 from .schema import ToolSchema, build_schema
 from .tools import Tools
 
 __all__ = [
+    "CallLoggingMiddleware",
+    "ErrorBoundaryMiddleware",
     "Inject",
     "SkillRefreshMiddleware",
     "Tool",
@@ -35,4 +40,5 @@ __all__ = [
     "description_from_context",
     "provided",
     "requires",
+    "standard_middleware",
 ]

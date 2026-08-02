@@ -15,6 +15,7 @@ from agenttoolkit import (
     build_schema,
     provided,
     requires,
+    standard_middleware,
 )
 
 
@@ -81,7 +82,7 @@ async def test_optional_injected_dependency_uses_function_default() -> None:
 
 @pytest.mark.asyncio
 async def test_missing_required_injection_is_returned_as_failure() -> None:
-    tools = Tools()
+    tools = Tools(middleware=standard_middleware())
 
     @tools.action("Use a required service")
     def identify(service: Inject[Service]) -> str:
@@ -97,7 +98,7 @@ async def test_missing_required_injection_is_returned_as_failure() -> None:
 
 @pytest.mark.asyncio
 async def test_unavailable_and_unknown_tools_report_available_names() -> None:
-    tools = Tools()
+    tools = Tools(middleware=standard_middleware())
 
     @tools.action("Always available")
     def public() -> None:
@@ -126,7 +127,7 @@ class RecordingMiddleware(ToolMiddleware):
             Awaitable[object],
         ],
     ) -> object:
-        self.events.append(f"before:{getattr(call.params, 'value', None)}")
+        self.events.append(f"before:{call.raw_args.get('value')}")
         result = await next(call)
         self.events.append(f"after:{result}")
         return result
@@ -272,7 +273,7 @@ def test_callable_schema_rejects_variadics_and_requires_input() -> None:
 
 @pytest.mark.asyncio
 async def test_param_model_binding_must_be_unambiguous() -> None:
-    tools = Tools()
+    tools = Tools(middleware=standard_middleware())
 
     @tools.action("Ambiguous", params=StatusParams)
     def ambiguous(first: object, second: object) -> None:
